@@ -1,0 +1,44 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getTenantId() {
+      return request.auth.token.tenantId;
+    }
+
+    function isTenantStaff(tenantId) {
+      return isAuthenticated() && getTenantId() == tenantId
+        && (request.auth.token.role in ['tenant_owner', 'staff']);
+    }
+
+    // Studio logos and branding assets: public read (shown on the public class
+    // explorer and PWA manifest before login), staff-only write.
+    match /tenants/{tenantId}/branding/{fileName} {
+      allow read: if true;
+      allow write: if isTenantStaff(tenantId)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Student avatars: public-ish read within the app (instructor roster shows them),
+    // writable only by the student themselves.
+    match /tenants/{tenantId}/avatars/{userId} {
+      allow read: if isAuthenticated() && getTenantId() == tenantId;
+      allow write: if isAuthenticated() && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Bank-transfer receipts uploaded by a student at checkout: private, staff-reviewed.
+    match /tenants/{tenantId}/receipts/{userId}/{fileName} {
+      allow read: if isTenantStaff(tenantId)
+        || (isAuthenticated() && request.auth.uid == userId);
+      allow write: if isAuthenticated() && request.auth.uid == userId
+        && request.resource.size < 10 * 1024 * 1024;
+    }
+  }
+}

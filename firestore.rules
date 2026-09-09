@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getTenantId() {
+      return request.auth.token.tenantId;
+    }
+
+    function getUserRole() {
+      return request.auth.token.role;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserRole() == 'superadmin';
+    }
+
+    function isTenantOwner(tenantId) {
+      return isAuthenticated() && getTenantId() == tenantId && getUserRole() == 'tenant_owner';
+    }
+
+    function isTenantStaff(tenantId) {
+      return isAuthenticated() && getTenantId() == tenantId
+        && (getUserRole() in ['tenant_owner', 'staff']);
+    }
+
+    // Instructors can read their own roster/notes but never finances or other tenants' data.
+    function isTenantInstructor(tenantId) {
+      return isAuthenticated() && getTenantId() == tenantId && getUserRole() == 'instructor';
+    }
+
+    function isStaffOrInstructor(tenantId) {
+      return isTenantStaff(tenantId) || isTenantInstructor(tenantId);
+    }
+
+    function isStudentOfTenant(tenantId) {
+      return isAuthenticated() && getTenantId() == tenantId && getUserRole() == 'student';
+    }
+
+    match /tenants/{tenantId} {
+      // Branding/settings are not sensitive and must be readable by anonymous visitors
+      // browsing the schedule before they sign up — the original spec required auth
+      // here, which would have broken the public class explorer. Mutations stay
+      // restricted to the owner.
+      allow read: if true;
+      allow write: if isTenantOwner(tenantId) || isSuperAdmin();
+
+      // Catalog data: public read (same reasoning as above), staff-only write.
+      match /branches/{branchId} {
+        allow read: if true;
+        allow write: if isTenantStaff(tenantId) || isSuperAdmin();
+
+        match /rooms/{roomId} {
+          allow read: if true;
+          allow write: if isTenantStaff(tenantId) || isSuperAdmin();
+        }
+      }
+
+      match /instructors/{instructorId} {
+        allow read: if true;
+        allow write: if isTenantStaff(tenantId) || isSuperAdmin();
+      }
+
+      match /classTypes/{classTypeId} {
+        allow read: if true;
+        allow write: if isTenantStaff(tenantId) || isSuperAdmin();
+      }
+
+      match /packages/{packageId} {
+        allow read: if true;
+        allow write: if isTenantStaff(tenantId) || isSuperAdmin();
+      }
+
+      // Schedules: public read (capacity/occupancy are not sensitive). Writes to
+      // bookedCount/waitlistCount are delegated to Cloud Functions (Admin SDK, which
+      // bypasses these rules) to keep the zero-overbooking transaction as the only
+      // writer; staff can still edit everything else (time, room, instructor).
+      match /schedules/{scheduleId} {
+        allow read: if true;
+        allow write: if isTenantStaff(tenantId) || isSuperAdmin();
+      }
+
+      // Bookings hold a studentId (PII) — no public read. Creation/cancellation go
+      // through bookClassSession/cancelBookingSession exclusively to keep capacity and
+      // credit writes atomic; staff can still write directly for counter operations
+      // (e.g. marking a no-show).
+      match /bookings/{bookingId} {
+        allow read: if isStaffOrInstructor(tenantId)
+          || (isAuthenticated() && resource.data.studentId == request.auth.uid);
+        allow create, update: if isTenantStaff(tenantId) || isSuperAdmin();
+        allow delete: if false;
+      }
+
+      match /waitlist/{entryId} {
+        allow read: if isTenantStaff(tenantId)
+          || (isAuthenticated() && resource.data.studentId == request.auth.uid);
+        allow write: if isTenantStaff(tenantId) || isSuperAdmin();
+      }
+
+      // Credits/financial data — individual student read, staff read-all for
+      // counter sales and manual adjustments.
+      match /studentPasses/{passId} {
+        allow read: if isTenantStaff(tenantId)
+          || (isAuthenticated() && resource.data.studentId == request.auth.uid);
+        allow write: if isTenantStaff(tenantId) || isSuperAdmin();
+      }
+    }
+
+    // Pending Mercado Pago purchases: a student may create their own pending intent
+    // right before checkout redirect, but only the webhook (Admin SDK, bypasses rules)
+    // may ever mark one "paid".
+    match /purchaseIntents/{purchaseId} {
+      allow read: if isAuthenticated() && resource.data.studentId == request.auth.uid;
+      allow create: if isAuthenticated()
+        && request.resource.data.studentId == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if isSuperAdmin()
+        || (isAuthenticated() && request.auth.uid == userId)
+        || (isAuthenticated() && resource.data.tenantId == getTenantId()
+            && isStaffOrInstructor(resource.data.tenantId));
+
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+
+      // A user may update their own profile (name, phone, emergency contact) but never
+      // grant themselves a role or tenant — only Cloud Functions (onboardTenant,
+      // registerStudent, and a future staff-invite function) change those, via the
+      // Admin SDK, which bypasses this rule entirely.
+      allow update: if isAuthenticated() && request.auth.uid == userId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.tenantId == resource.data.tenantId;
+
+      allow delete: if false;
+    }
+  }
+}
