@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 
+import { addDays, isSameDay } from "@/lib/calendarDate";
 import type { ClassTypeDoc, InstructorDoc, ScheduleDoc } from "@/lib/types/firestore";
 import { Button } from "@/components/ui/Button";
 
@@ -13,25 +14,6 @@ const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const HOUR_HEIGHT = 56;
 const MIN_START_HOUR = 6;
 const MIN_END_HOUR = 21;
-
-export function getMonday(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function addDays(date: Date, days: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
 
 interface WeekCalendarProps {
   weekStart: Date;

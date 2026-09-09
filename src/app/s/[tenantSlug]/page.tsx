@@ -13,15 +13,17 @@ import {
   where,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import { CalendarX } from "lucide-react";
+import { CalendarX, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { db, functions } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useTenant } from "@/lib/tenant/TenantProvider";
+import { addDays, getMonday, isSameDay, startOfDay } from "@/lib/calendarDate";
 import type { ClassLevel, ClassTypeDoc, InstructorDoc, RoomDoc, ScheduleDoc } from "@/lib/types/firestore";
 import { LEVEL_LABELS } from "@/lib/classLevel";
 import { ClassCard } from "@/components/student/ClassCard";
 import { DayPicker } from "@/components/student/DayPicker";
+import { MonthCalendar } from "@/components/student/MonthCalendar";
 import { SpotPicker } from "@/components/student/SpotPicker";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -35,9 +37,7 @@ interface BookClassSessionResult {
   status: "confirmed" | "waitlisted";
 }
 
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
+type CalendarView = "semana" | "mes";
 
 export default function ClassExplorerPage() {
   const { tenantId, tenant } = useTenant();
@@ -47,11 +47,16 @@ export default function ClassExplorerPage() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [classTypes, setClassTypes] = useState<Record<string, ClassTypeDoc>>({});
   const [instructors, setInstructors] = useState<Record<string, InstructorDoc>>({});
-  const [selectedDay, setSelectedDay] = useState(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
+  const [view, setView] = useState<CalendarView>("semana");
+  const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
+  const [monthDate, setMonthDate] = useState(() => startOfDay(new Date()));
+
+  function goToDay(day: Date) {
+    setSelectedDay(day);
+    setWeekStart(getMonday(day));
+    setMonthDate(day);
+  }
 
   const [levelFilter, setLevelFilter] = useState<ClassLevel | "todos">("todos");
   const [instructorFilter, setInstructorFilter] = useState<string>("todos");
@@ -115,15 +120,28 @@ export default function ClassExplorerPage() {
     return onSnapshot(signatureQuery, (snap) => setWaiverSigned(!snap.empty));
   }, [tenantId, user, tenant.waiver?.version]);
 
-  const daySchedules = useMemo(() => {
-    return schedules.filter((s) => {
-      if (!isSameDay(s.startAt.toDate(), selectedDay)) return false;
+  const matchesFilters = useMemo(() => {
+    return (s: Schedule) => {
       const classType = classTypes[s.classTypeId];
       if (levelFilter !== "todos" && classType?.level !== levelFilter) return false;
       if (instructorFilter !== "todos" && s.instructorId !== instructorFilter) return false;
       return true;
-    });
-  }, [schedules, selectedDay, levelFilter, instructorFilter, classTypes]);
+    };
+  }, [classTypes, levelFilter, instructorFilter]);
+
+  const daySchedules = useMemo(() => {
+    return schedules.filter((s) => isSameDay(s.startAt.toDate(), selectedDay) && matchesFilters(s));
+  }, [schedules, selectedDay, matchesFilters]);
+
+  const daysWithClasses = useMemo(() => {
+    const keys = new Set<string>();
+    for (const s of schedules) {
+      if (!matchesFilters(s)) continue;
+      const d = s.startAt.toDate();
+      keys.add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+    }
+    return keys;
+  }, [schedules, matchesFilters]);
 
   async function openBookingRow(schedule: Schedule) {
     if (!user) {
@@ -187,7 +205,69 @@ export default function ClassExplorerPage() {
       <h1 className="text-xl font-bold text-gray-900">Reserva tu clase</h1>
 
       <div className="sticky top-0 z-10 -mx-4 mt-3 space-y-2 bg-gray-50 px-4 pb-2 pt-1">
-        <DayPicker selected={selectedDay} onSelect={setSelectedDay} />
+        <div className="flex items-center justify-between gap-2">
+          {view === "semana" ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => goToDay(addDays(selectedDay, -7))}
+                aria-label="Semana anterior"
+                className="rounded-md p-1 text-gray-500 hover:bg-gray-100"
+              >
+                <ChevronLeft className="h-4 w-4" strokeWidth={2} />
+              </button>
+              <p className="text-xs font-medium capitalize text-ink-soft">
+                {weekStart.toLocaleDateString("es-MX", { day: "numeric", month: "short" })} –{" "}
+                {addDays(weekStart, 6).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}
+              </p>
+              <button
+                onClick={() => goToDay(addDays(selectedDay, 7))}
+                aria-label="Semana siguiente"
+                className="rounded-md p-1 text-gray-500 hover:bg-gray-100"
+              >
+                <ChevronRight className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
+          ) : (
+            <span />
+          )}
+
+          <div className="inline-flex shrink-0 rounded-md border border-gray-200 bg-white p-0.5 text-xs">
+            <button
+              onClick={() => setView("semana")}
+              className="rounded px-2.5 py-1 font-medium transition-colors"
+              style={
+                view === "semana"
+                  ? { backgroundColor: "var(--tenant-primary)", color: "#fff" }
+                  : { color: "#4b5563" }
+              }
+            >
+              Semana
+            </button>
+            <button
+              onClick={() => setView("mes")}
+              className="rounded px-2.5 py-1 font-medium transition-colors"
+              style={
+                view === "mes" ? { backgroundColor: "var(--tenant-primary)", color: "#fff" } : { color: "#4b5563" }
+              }
+            >
+              Mes
+            </button>
+          </div>
+        </div>
+
+        {view === "semana" ? (
+          <DayPicker weekStart={weekStart} selected={selectedDay} onSelect={goToDay} />
+        ) : (
+          <MonthCalendar
+            monthDate={monthDate}
+            selected={selectedDay}
+            onSelect={goToDay}
+            onPrevMonth={() => goToDay(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}
+            onNextMonth={() => goToDay(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}
+            onToday={() => goToDay(startOfDay(new Date()))}
+            daysWithClasses={daysWithClasses}
+          />
+        )}
 
         <div className="flex gap-2 overflow-x-auto">
           <select

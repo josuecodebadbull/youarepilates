@@ -15,13 +15,14 @@ import {
 import { CalendarDays } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
+import { getMonday } from "@/lib/calendarDate";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import type { BranchDoc, ClassTypeDoc, InstructorDoc, RoomDoc, ScheduleDoc } from "@/lib/types/firestore";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FormField, inputClass } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { getMonday, WeekCalendar } from "@/components/admin/WeekCalendar";
+import { WeekCalendar } from "@/components/admin/WeekCalendar";
 
 interface Schedule extends ScheduleDoc {
   id: string;
