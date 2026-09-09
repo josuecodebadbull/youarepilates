@@ -105,7 +105,6 @@ function StudentRow({
   const [passes, setPasses] = useState<Pass[]>([]);
 
   useEffect(() => {
-    if (!expanded) return;
     const passesQuery = query(
       collection(db, "tenants", tenantId, "studentPasses"),
       where("studentId", "==", student.id),
@@ -114,7 +113,7 @@ function StudentRow({
     return onSnapshot(passesQuery, (snapshot) => {
       setPasses(snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as StudentPassDoc) })));
     });
-  }, [expanded, tenantId, student.id]);
+  }, [tenantId, student.id]);
 
   const totalCredits = passes.reduce((sum, pass) => sum + pass.remainingCredits, 0);
 

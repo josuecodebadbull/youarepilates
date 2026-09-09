@@ -62,10 +62,10 @@ export function StudentShell({ children }: { children: ReactNode }) {
 
   const navItems = [
     { href: base, label: "Reservar", icon: CalendarIcon },
-    { href: `${base}/mis-clases`, label: "Mis clases", icon: TicketIcon },
+    ...(user ? [{ href: `${base}/mis-clases`, label: "Mis clases", icon: TicketIcon }] : []),
     { href: `${base}/precios`, label: "Precios", icon: TagIcon },
     { href: `${base}/estudio`, label: "Estudio", icon: PinIcon },
-    { href: `${base}/perfil`, label: "Perfil", icon: UserIcon },
+    ...(user ? [{ href: `${base}/perfil`, label: "Perfil", icon: UserIcon }] : []),
   ];
 
   return (

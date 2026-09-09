@@ -1,23 +1,33 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import {
   addDoc,
   collection,
   doc,
+  getDoc,
   onSnapshot,
   query,
   Timestamp,
   updateDoc,
   where,
 } from "firebase/firestore";
-import { CheckCircle2 } from "lucide-react";
+import { ArrowRight, CalendarDays, CheckCircle2, Ticket } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import { DEFAULT_TENANT_WAIVER } from "@/lib/tenantWaiver";
-import type { StudentPassDoc, UserDoc, WaiverSignatureDoc } from "@/lib/types/firestore";
+import type {
+  BookingDoc,
+  ClassTypeDoc,
+  InstructorDoc,
+  ScheduleDoc,
+  StudentPassDoc,
+  UserDoc,
+  WaiverSignatureDoc,
+} from "@/lib/types/firestore";
 import { Button } from "@/components/ui/Button";
 import { FormField, inputClass } from "@/components/ui/FormField";
 
@@ -29,6 +39,7 @@ export default function PerfilPage() {
   const { tenantId, tenant } = useTenant();
   const waiver = tenant.waiver ?? DEFAULT_TENANT_WAIVER;
   const { user } = useAuth();
+  const base = `/s/${tenant.slug}`;
   const [passes, setPasses] = useState<Pass[]>([]);
   const [profile, setProfile] = useState<UserDoc | null>(null);
   const [signature, setSignature] = useState<WaiverSignatureDoc | null | undefined>(undefined);
@@ -101,7 +112,21 @@ export default function PerfilPage() {
             <li className="text-sm text-gray-500">No tienes paquetes activos.</li>
           )}
         </ul>
+
+        {totalCredits === 0 && (
+          <Link
+            href={`${base}/precios`}
+            className="mt-3 flex items-center justify-between rounded-lg bg-brand-50 px-3 py-2.5 text-sm font-semibold text-brand-800"
+          >
+            <span className="flex items-center gap-2">
+              <Ticket className="h-4 w-4" strokeWidth={1.75} /> Comprar un paquete
+            </span>
+            <ArrowRight className="h-4 w-4" strokeWidth={2} />
+          </Link>
+        )}
       </section>
+
+      <NextClassCard tenantId={tenantId} studentId={user.uid} base={base} hasCredits={totalCredits > 0} />
 
       {waiver.version > 0 && (
         <WaiverSection
@@ -116,6 +141,120 @@ export default function PerfilPage() {
 
       {profile && <PersonalInfoForm userId={user.uid} profile={profile} />}
     </div>
+  );
+}
+
+interface UpcomingClass {
+  bookingId: string;
+  schedule: ScheduleDoc;
+  classType?: ClassTypeDoc;
+  instructor?: InstructorDoc;
+}
+
+function NextClassCard({
+  tenantId,
+  studentId,
+  base,
+  hasCredits,
+}: {
+  tenantId: string;
+  studentId: string;
+  base: string;
+  hasCredits: boolean;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [next, setNext] = useState<UpcomingClass | null>(null);
+
+  useEffect(() => {
+    const bookingsQuery = query(
+      collection(db, "tenants", tenantId, "bookings"),
+      where("studentId", "==", studentId),
+      where("status", "==", "confirmed"),
+    );
+    return onSnapshot(bookingsQuery, async (snapshot) => {
+      const bookings = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as BookingDoc) }));
+      if (bookings.length === 0) {
+        setNext(null);
+        setLoading(false);
+        return;
+      }
+
+      const withSchedules = await Promise.all(
+        bookings.map(async (booking) => {
+          const scheduleSnap = await getDoc(doc(db, "tenants", tenantId, "schedules", booking.scheduleId));
+          return scheduleSnap.exists()
+            ? { bookingId: booking.id, schedule: scheduleSnap.data() as ScheduleDoc }
+            : null;
+        }),
+      );
+
+      const now = Date.now();
+      const soonest = withSchedules
+        .filter((s): s is { bookingId: string; schedule: ScheduleDoc } => s !== null)
+        .filter((s) => s.schedule.startAt.toMillis() >= now)
+        .sort((a, b) => a.schedule.startAt.toMillis() - b.schedule.startAt.toMillis())[0];
+
+      if (!soonest) {
+        setNext(null);
+        setLoading(false);
+        return;
+      }
+
+      const [classTypeSnap, instructorSnap] = await Promise.all([
+        getDoc(doc(db, "tenants", tenantId, "classTypes", soonest.schedule.classTypeId)),
+        getDoc(doc(db, "tenants", tenantId, "instructors", soonest.schedule.instructorId)),
+      ]);
+
+      setNext({
+        bookingId: soonest.bookingId,
+        schedule: soonest.schedule,
+        classType: classTypeSnap.exists() ? (classTypeSnap.data() as ClassTypeDoc) : undefined,
+        instructor: instructorSnap.exists() ? (instructorSnap.data() as InstructorDoc) : undefined,
+      });
+      setLoading(false);
+    });
+  }, [tenantId, studentId]);
+
+  if (loading) return null;
+
+  if (!next) {
+    return (
+      <section className="rounded-xl border border-gray-200 bg-white p-5">
+        <p className="text-sm text-gray-500">No tienes clases próximas reservadas.</p>
+        {hasCredits && (
+          <Link
+            href={base}
+            className="mt-3 flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-semibold text-white"
+            style={{ backgroundColor: "var(--tenant-primary)" }}
+          >
+            <span className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" strokeWidth={1.75} /> Reservar una clase
+            </span>
+            <ArrowRight className="h-4 w-4" strokeWidth={2} />
+          </Link>
+        )}
+      </section>
+    );
+  }
+
+  const startAt = next.schedule.startAt.toDate();
+
+  return (
+    <Link
+      href={`${base}/mis-clases`}
+      className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-5"
+    >
+      <div className="min-w-0">
+        <p className="text-sm text-gray-500">Tu próxima clase</p>
+        <p className="mt-1 truncate font-semibold text-ink">{next.classType?.name ?? "Clase"}</p>
+        <p className="text-sm text-ink-soft">
+          {startAt.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "short" })} ·{" "}
+          {startAt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
+          {next.instructor && ` · ${next.instructor.name}`}
+        </p>
+      </div>
+      <ArrowRight className="h-5 w-5 shrink-0 text-gray-400" strokeWidth={2} />
+    </Link>
   );
 }
 
