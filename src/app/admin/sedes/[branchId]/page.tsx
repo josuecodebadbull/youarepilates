@@ -22,6 +22,7 @@ import { useTenant } from "@/lib/tenant/TenantProvider";
 import type { BranchDoc, RoomDoc } from "@/lib/types/firestore";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { FileInput } from "@/components/ui/FileInput";
 import { FormField, inputClass } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
 
@@ -153,7 +154,7 @@ function BranchInfoForm({
   const displayedPhotoUrl = photoPreviewUrl ?? photoUrl;
 
   return (
-    <div className="mb-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5">
+    <div className="mb-6 max-w-2xl space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5">
       <h2 className="font-semibold text-gray-900">Información para tus alumnos</h2>
       <p className="text-sm text-gray-500">
         Se muestra en la sección &ldquo;Estudio&rdquo; de la app, junto con la dirección
@@ -161,7 +162,7 @@ function BranchInfoForm({
       </p>
 
       <FormField label="Foto de la sede" htmlFor="branch-photo" hint="Opcional">
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-white">
             {displayedPhotoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -170,13 +171,7 @@ function BranchInfoForm({
               <ImagePlus className="h-6 w-6 text-gray-300" strokeWidth={1.5} />
             )}
           </div>
-          <input
-            id="branch-photo"
-            type="file"
-            accept="image/*"
-            onChange={(e) => handlePhotoChange(e.target.files?.[0] ?? null)}
-            className="text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-800"
-          />
+          <FileInput id="branch-photo" accept="image/*" onChange={handlePhotoChange} buttonLabel="Subir foto" />
         </div>
       </FormField>
 
@@ -250,7 +245,7 @@ function RoomForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mb-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5"
+      className="mb-6 max-w-2xl space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5"
     >
       <h2 className="font-semibold text-gray-900">Nueva sala</h2>
 

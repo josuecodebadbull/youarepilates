@@ -38,8 +38,19 @@ export interface TenantDoc {
 
 export interface ClassTypeDoc {
   name: string;
+  durationMinutes: number;
   requiredCredits: number;
+  description: string;
   level: ClassLevel;
+}
+
+export interface BranchDoc {
+  name: string;
+  address: string;
+  createdAt: Timestamp;
+  phone?: string;
+  photoUrl?: string | null;
+  arrivalNote?: string;
 }
 
 export interface RoomDoc {
@@ -47,6 +58,21 @@ export interface RoomDoc {
   capacity: number;
   spots: { spotNumber: number; label: string }[];
   blockedSpots: number[];
+}
+
+export interface InstructorDoc {
+  name: string;
+  bio: string;
+  photoUrl: string | null;
+  active: boolean;
+}
+
+export interface PackageDoc {
+  name: string;
+  creditAmount: number;
+  price: number;
+  validityDays: number;
+  active: boolean;
 }
 
 export interface ScheduleDoc {

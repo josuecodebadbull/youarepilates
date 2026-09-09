@@ -10,6 +10,7 @@ import { useTenant } from "@/lib/tenant/TenantProvider";
 import { DEFAULT_TENANT_PROFILE } from "@/lib/tenantProfile";
 import type { TenantProfile } from "@/lib/types/firestore";
 import { Button } from "@/components/ui/Button";
+import { FileInput } from "@/components/ui/FileInput";
 import { FormField, inputClass } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
 
@@ -90,7 +91,7 @@ export default function PerfilEstudioPage() {
           htmlFor="hero-photo"
           hint="Se muestra arriba de todo en la sección Estudio — recomendado horizontal"
         >
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
             <div className="flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
               {displayedHeroUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -99,13 +100,7 @@ export default function PerfilEstudioPage() {
                 <ImagePlus className="h-6 w-6 text-gray-300" strokeWidth={1.5} />
               )}
             </div>
-            <input
-              id="hero-photo"
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleHeroChange(e.target.files?.[0] ?? null)}
-              className="text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-800"
-            />
+            <FileInput id="hero-photo" accept="image/*" onChange={handleHeroChange} buttonLabel="Subir foto" />
           </div>
         </FormField>
 

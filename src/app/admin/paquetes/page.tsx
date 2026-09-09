@@ -102,7 +102,7 @@ function PackageForm({ tenantId, onDone }: { tenantId: string; onDone: () => voi
   return (
     <form
       onSubmit={handleSubmit}
-      className="mb-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5"
+      className="mb-6 max-w-2xl space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5"
     >
       <h2 className="font-semibold text-gray-900">Nuevo paquete</h2>
 

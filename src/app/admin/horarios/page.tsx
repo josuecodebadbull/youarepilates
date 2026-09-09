@@ -21,6 +21,7 @@ import type { BranchDoc, ClassTypeDoc, InstructorDoc, RoomDoc, ScheduleDoc } fro
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FormField, inputClass } from "@/components/ui/FormField";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { WeekCalendar } from "@/components/admin/WeekCalendar";
 
@@ -40,6 +41,24 @@ interface Instructor extends InstructorDoc {
   id: string;
 }
 
+interface SlotPrefill {
+  branchId?: string;
+  date: string;
+  time: string;
+}
+
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toTimeInputValue(hour: number): string {
+  const clamped = Math.min(Math.max(hour, 0), 23);
+  return `${String(clamped).padStart(2, "0")}:00`;
+}
+
 export default function HorariosPage() {
   const { tenantId } = useTenant();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -47,6 +66,7 @@ export default function HorariosPage() {
   const [classTypes, setClassTypes] = useState<ClassType[]>([]);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [slotPrefill, setSlotPrefill] = useState<SlotPrefill | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [view, setView] = useState<"calendar" | "list">("calendar");
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
@@ -119,18 +139,22 @@ export default function HorariosPage() {
     [instructors],
   );
 
+  function openForm(prefill: SlotPrefill | null) {
+    setSlotPrefill(prefill);
+    setFormOpen(true);
+  }
+
   return (
     <div>
       <PageHeader
         title="Horarios"
         description="Las clases programadas de todas tus sedes, ordenadas por fecha. El cupo se actualiza en vivo conforme tus alumnos reservan."
         action={
-          !formOpen &&
-          !missingPrerequisite && <Button onClick={() => setFormOpen(true)}>+ Programar clase</Button>
+          !missingPrerequisite && <Button onClick={() => openForm(null)}>+ Programar clase</Button>
         }
       />
 
-      {missingPrerequisite && !formOpen && (
+      {missingPrerequisite && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           Antes de programar una clase necesitas al menos una{" "}
           {branches.length === 0 && (
@@ -153,29 +177,25 @@ export default function HorariosPage() {
       )}
 
       {formOpen && (
-        <ScheduleForm
-          tenantId={tenantId}
-          branches={branches}
-          classTypes={classTypes}
-          instructors={instructors}
-          onDone={() => setFormOpen(false)}
-        />
+        <Modal title="Programar clase" onClose={() => setFormOpen(false)}>
+          <ScheduleForm
+            tenantId={tenantId}
+            branches={branches}
+            classTypes={classTypes}
+            instructors={instructors}
+            existingSchedules={schedules}
+            prefill={slotPrefill}
+            onDone={() => setFormOpen(false)}
+          />
+        </Modal>
       )}
 
-      {loaded && schedules.length === 0 && !formOpen ? (
+      {loaded && schedules.length === 0 && !missingPrerequisite ? (
         <EmptyState
           icon={<CalendarDays className="h-7 w-7" strokeWidth={1.75} />}
           title="Todavía no hay clases programadas"
-          description={
-            missingPrerequisite
-              ? "Completa sedes, tipos de clase e instructores para poder programar tu primera clase."
-              : "Programa tu primera clase para que tus alumnos puedan empezar a reservar."
-          }
-          action={
-            !missingPrerequisite && (
-              <Button onClick={() => setFormOpen(true)}>+ Programar mi primera clase</Button>
-            )
-          }
+          description="Programa tu primera clase para que tus alumnos puedan empezar a reservar."
+          action={<Button onClick={() => openForm(null)}>+ Programar mi primera clase</Button>}
         />
       ) : (
         <>
@@ -205,6 +225,11 @@ export default function HorariosPage() {
               onPrevWeek={() => setWeekStart((d) => shiftDays(d, -7))}
               onNextWeek={() => setWeekStart((d) => shiftDays(d, 7))}
               onToday={() => setWeekStart(getMonday(new Date()))}
+              onSlotClick={
+                missingPrerequisite
+                  ? undefined
+                  : (day, hour) => openForm({ date: toDateInputValue(day), time: toTimeInputValue(hour) })
+              }
             />
           ) : (
             <>
@@ -272,24 +297,30 @@ function ScheduleForm({
   branches,
   classTypes,
   instructors,
+  existingSchedules,
+  prefill,
   onDone,
 }: {
   tenantId: string;
   branches: Branch[];
   classTypes: ClassType[];
   instructors: Instructor[];
+  existingSchedules: Schedule[];
+  prefill: SlotPrefill | null;
   onDone: () => void;
 }) {
-  const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
+  const [branchId, setBranchId] = useState(prefill?.branchId ?? branches[0]?.id ?? "");
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomId, setRoomId] = useState("");
   const [classTypeId, setClassTypeId] = useState(classTypes[0]?.id ?? "");
   const [instructorId, setInstructorId] = useState(instructors[0]?.id ?? "");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("09:00");
+  const [date, setDate] = useState(prefill?.date ?? "");
+  const [time, setTime] = useState(prefill?.time ?? "09:00");
   const [repeatWeeks, setRepeatWeeks] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const todayInputValue = useMemo(() => toDateInputValue(new Date()), []);
 
   useEffect(() => {
     if (!branchId) return;
@@ -324,20 +355,49 @@ function ScheduleForm({
       return;
     }
 
+    const [year, month, day] = date.split("-").map(Number);
+    const [hour, minute] = time.split(":").map(Number);
+    const baseStart = new Date(year!, month! - 1, day!, hour!, minute!);
+
+    if (baseStart.getTime() < Date.now()) {
+      setError("No puedes programar una clase en una fecha/hora que ya pasó.");
+      return;
+    }
+
+    // Build every occurrence first so we can validate all of them (past-time is only
+    // possible for the first one, but overlaps can happen on any repeated week) before
+    // writing anything.
+    const occurrences = Array.from({ length: repeatWeeks }, (_, week) => {
+      const startAt = new Date(baseStart);
+      startAt.setDate(startAt.getDate() + week * 7);
+      const endAt = new Date(startAt.getTime() + selectedClassType.durationMinutes * 60_000);
+      return { startAt, endAt };
+    });
+
+    const conflict = occurrences.find(({ startAt, endAt }) =>
+      existingSchedules.some((s) => {
+        if (s.roomId !== selectedRoom.id || s.status !== "scheduled") return false;
+        const sStart = s.startAt.toDate();
+        const sEnd = s.endAt.toDate();
+        return startAt < sEnd && sStart < endAt;
+      }),
+    );
+    if (conflict) {
+      setError(
+        `Esa sala ya tiene una clase que se traslapa el ${conflict.startAt.toLocaleDateString("es-MX", {
+          day: "numeric",
+          month: "short",
+        })} a las ${conflict.startAt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}. Elige otro horario o sala.`,
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const [year, month, day] = date.split("-").map(Number);
-      const [hour, minute] = time.split(":").map(Number);
-      const baseStart = new Date(year!, month! - 1, day!, hour!, minute!);
-
       const batch = writeBatch(db);
       const schedulesCollection = collection(db, "tenants", tenantId, "schedules");
 
-      for (let week = 0; week < repeatWeeks; week++) {
-        const startAt = new Date(baseStart);
-        startAt.setDate(startAt.getDate() + week * 7);
-        const endAt = new Date(startAt.getTime() + selectedClassType.durationMinutes * 60_000);
-
+      for (const { startAt, endAt } of occurrences) {
         batch.set(doc(schedulesCollection), {
           branchId,
           roomId: selectedRoom.id,
@@ -361,12 +421,7 @@ function ScheduleForm({
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mb-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5"
-    >
-      <h2 className="font-semibold text-gray-900">Programar clase</h2>
-
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Sede" htmlFor="schedule-branch" required>
           <select
@@ -447,12 +502,13 @@ function ScheduleForm({
         </FormField>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Fecha" htmlFor="schedule-date" required>
           <input
             id="schedule-date"
             type="date"
             required
+            min={todayInputValue}
             value={date}
             onChange={(e) => setDate(e.target.value)}
             className={inputClass}
@@ -469,23 +525,23 @@ function ScheduleForm({
             className={inputClass}
           />
         </FormField>
-
-        <FormField
-          label="Repetir semanalmente"
-          htmlFor="schedule-repeat"
-          hint="Crea la misma clase cada semana. Deja en 1 para una sola clase."
-        >
-          <input
-            id="schedule-repeat"
-            type="number"
-            min={1}
-            max={26}
-            value={repeatWeeks}
-            onChange={(e) => setRepeatWeeks(Number(e.target.value))}
-            className={inputClass}
-          />
-        </FormField>
       </div>
+
+      <FormField
+        label="Repetir semanalmente"
+        htmlFor="schedule-repeat"
+        hint="Crea la misma clase cada semana. Deja en 1 para una sola clase."
+      >
+        <input
+          id="schedule-repeat"
+          type="number"
+          min={1}
+          max={26}
+          value={repeatWeeks}
+          onChange={(e) => setRepeatWeeks(Number(e.target.value))}
+          className={inputClass}
+        />
+      </FormField>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

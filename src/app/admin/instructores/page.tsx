@@ -11,6 +11,7 @@ import type { InstructorDoc } from "@/lib/types/firestore";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { FileInput } from "@/components/ui/FileInput";
 import { FormField, inputClass } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
 
@@ -127,25 +128,21 @@ function InstructorForm({ tenantId, onDone }: { tenantId: string; onDone: () => 
   return (
     <form
       onSubmit={handleSubmit}
-      className="mb-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5"
+      className="mb-6 max-w-2xl space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5"
     >
       <h2 className="font-semibold text-gray-900">Nuevo instructor</h2>
 
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-center gap-4">
         <Avatar name={name || "?"} photoUrl={photoPreviewUrl} size={56} />
-        <FormField
-          label="Foto de perfil"
-          htmlFor="instructor-photo"
-          hint="Opcional — si no subes una, se genera un avatar con sus iniciales"
-        >
-          <input
-            id="instructor-photo"
-            type="file"
-            accept="image/*"
-            onChange={(e) => handlePhotoChange(e.target.files?.[0] ?? null)}
-            className="text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-800"
-          />
-        </FormField>
+        <div className="min-w-0 flex-1">
+          <FormField
+            label="Foto de perfil"
+            htmlFor="instructor-photo"
+            hint="Opcional — si no subes una, se genera un avatar con sus iniciales"
+          >
+            <FileInput id="instructor-photo" accept="image/*" onChange={handlePhotoChange} buttonLabel="Subir foto" />
+          </FormField>
+        </div>
       </div>
 
       <FormField

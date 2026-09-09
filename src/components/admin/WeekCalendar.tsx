@@ -23,6 +23,8 @@ interface WeekCalendarProps {
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onToday: () => void;
+  /** Called with the day + hour of an empty cell the user clicked, to open the "programar clase" modal prefilled. */
+  onSlotClick?: (day: Date, hour: number) => void;
 }
 
 export function WeekCalendar({
@@ -33,6 +35,7 @@ export function WeekCalendar({
   onPrevWeek,
   onNextWeek,
   onToday,
+  onSlotClick,
 }: WeekCalendarProps) {
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
@@ -78,6 +81,12 @@ export function WeekCalendar({
         <p className="text-sm font-medium capitalize text-gray-700">{rangeLabel}</p>
       </div>
 
+      {onSlotClick && (
+        <p className="border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-xs text-gray-500">
+          Haz clic en un espacio vacío del calendario para programar una clase ahí.
+        </p>
+      )}
+
       <div className="overflow-x-auto">
         <div className="grid min-w-[720px] grid-cols-[48px_repeat(7,1fr)]">
           <div />
@@ -110,7 +119,17 @@ export function WeekCalendar({
             return (
               <div
                 key={day.toISOString()}
-                className="relative border-l border-gray-200"
+                onClick={
+                  onSlotClick
+                    ? (e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const offsetY = e.clientY - rect.top;
+                        const hour = startHour + Math.floor(offsetY / HOUR_HEIGHT);
+                        onSlotClick(day, hour);
+                      }
+                    : undefined
+                }
+                className={`relative border-l border-gray-200 ${onSlotClick ? "cursor-pointer hover:bg-brand-50/40" : ""}`}
                 style={{
                   height: gridHeight,
                   backgroundImage: `repeating-linear-gradient(to bottom, #e5e7eb 0, #e5e7eb 1px, transparent 1px, transparent ${HOUR_HEIGHT}px)`,
@@ -132,6 +151,7 @@ export function WeekCalendar({
                   return (
                     <div
                       key={schedule.id}
+                      onClick={(e) => e.stopPropagation()}
                       title={`${classType?.name ?? "Clase"} · ${timeLabel} · ${instructor?.name ?? ""} · ${schedule.bookedCount}/${schedule.capacity}`}
                       className={`absolute inset-x-0.5 overflow-hidden rounded border px-1.5 py-0.5 text-[11px] leading-tight ${
                         isFull
