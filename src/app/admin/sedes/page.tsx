@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   addDoc,
@@ -45,7 +46,7 @@ export default function SedesPage() {
     <div>
       <PageHeader
         title="Sedes"
-        description="Las sucursales físicas de tu estudio. Cada alumno elige una sede al reservar, y cada sede tiene sus propias salas y horarios."
+        description="Las sucursales físicas de tu estudio. Entra a una sede para gestionar sus salas y camas de reformer."
         action={
           !formOpen && (
             <Button onClick={() => setFormOpen(true)}>+ Agregar sede</Button>
@@ -67,10 +68,19 @@ export default function SedesPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {branches.map((branch) => (
-            <div key={branch.id} className="rounded-lg border border-gray-200 p-5">
-              <p className="font-medium text-gray-900">{branch.name}</p>
-              <p className="mt-1 text-sm text-gray-500">{branch.address}</p>
-            </div>
+            <Link
+              key={branch.id}
+              href={`/admin/sedes/${branch.id}`}
+              className="flex items-center justify-between rounded-lg border border-gray-200 p-5 hover:border-gray-400 hover:bg-gray-50"
+            >
+              <div>
+                <p className="font-medium text-gray-900">{branch.name}</p>
+                <p className="mt-1 text-sm text-gray-500">{branch.address}</p>
+              </div>
+              <span aria-hidden className="text-gray-400">
+                →
+              </span>
+            </Link>
           ))}
         </div>
       )}
