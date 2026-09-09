@@ -10,6 +10,7 @@ import { auth, db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { TenantProvider } from "@/lib/tenant/TenantProvider";
 import type { TenantDoc } from "@/lib/types/firestore";
+import { StudentAppLink } from "@/components/admin/StudentAppLink";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Resumen" },
@@ -73,6 +74,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
+          <StudentAppLink slug={tenant.slug} compact />
+
           <button
             onClick={() => signOut(auth)}
             className="mt-8 text-sm text-gray-500 hover:text-gray-800"

@@ -6,6 +6,7 @@ import { collection, getCountFromServer, query, where } from "firebase/firestore
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
+import { StudentAppLink } from "@/components/admin/StudentAppLink";
 
 export default function AdminDashboardPage() {
   return (
@@ -60,34 +61,17 @@ function AdminDashboardContent() {
 }
 
 function WelcomeBanner({ slug }: { slug: string }) {
-  const [copied, setCopied] = useState(false);
-  const studentAppUrl =
-    typeof window !== "undefined" ? `${window.location.origin}/s/${slug}` : `/s/${slug}`;
-
-  async function handleCopy() {
-    await navigator.clipboard.writeText(studentAppUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
   return (
     <div className="mb-8 rounded-lg border border-indigo-200 bg-indigo-50 p-6">
       <h2 className="font-semibold text-indigo-900">¡Tu estudio está listo! 🎉</h2>
       <p className="mt-1 text-sm text-indigo-800">
         Siguiente paso: agrega una sede y un paquete de créditos en el menú de la
         izquierda. Cuando estés list@, comparte este link con tus alumnos para que
-        reserven sus clases:
+        reserven sus clases (también lo tienes siempre a la mano en la barra
+        lateral):
       </p>
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <code className="flex-1 truncate rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm text-indigo-900">
-          {studentAppUrl}
-        </code>
-        <button
-          onClick={handleCopy}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-        >
-          {copied ? "¡Copiado!" : "Copiar link"}
-        </button>
+      <div className="mt-3">
+        <StudentAppLink slug={slug} />
       </div>
     </div>
   );
