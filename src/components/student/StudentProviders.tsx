@@ -12,7 +12,9 @@ export function StudentProviders({
   children,
 }: {
   tenantId: string;
-  tenant: TenantDoc;
+  // No `createdAt`: this is fed by a server component (resolveTenant.ts uses the
+  // Admin SDK), and a Timestamp class instance can't cross into this client component.
+  tenant: Omit<TenantDoc, "createdAt">;
   children: ReactNode;
 }) {
   const brandVars = {

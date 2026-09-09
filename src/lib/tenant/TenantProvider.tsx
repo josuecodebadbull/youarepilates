@@ -6,7 +6,10 @@ import type { TenantDoc } from "@/lib/types/firestore";
 
 export interface TenantContextValue {
   tenantId: string;
-  tenant: TenantDoc;
+  // Omits `createdAt`: when this comes from a server component (the student PWA's
+  // tenant lookup, via resolveTenant.ts) it's an Admin SDK Timestamp instance, which
+  // can't cross into a client component. Nothing in the UI reads it.
+  tenant: Omit<TenantDoc, "createdAt">;
 }
 
 const TenantContext = createContext<TenantContextValue | null>(null);

@@ -5,7 +5,12 @@ import type { TenantDoc } from "@/lib/types/firestore";
 
 export interface ResolvedTenant {
   id: string;
-  data: TenantDoc;
+  // No `createdAt` here: it's an Admin SDK Timestamp instance, and Next.js can't
+  // serialize a class instance across the server -> client component boundary
+  // (this value gets passed into <StudentProviders>, a client component). Nothing
+  // in the student PWA needs it, so it's dropped at the source instead of faked
+  // into a plain value.
+  data: Omit<TenantDoc, "createdAt">;
 }
 
 /**
@@ -25,5 +30,6 @@ export async function getTenantBySlug(slug: string): Promise<ResolvedTenant | nu
   }
 
   const doc = snapshot.docs[0]!;
-  return { id: doc.id, data: doc.data() as TenantDoc };
+  const { createdAt: _createdAt, ...data } = doc.data() as TenantDoc;
+  return { id: doc.id, data };
 }

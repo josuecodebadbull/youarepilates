@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -20,9 +20,17 @@ export async function generateMetadata({
 
   return {
     title: tenant.data.name,
-    themeColor: tenant.data.branding.primaryHex,
     manifest: `/s/${params.tenantSlug}/manifest.webmanifest`,
   };
+}
+
+export async function generateViewport({
+  params,
+}: {
+  params: { tenantSlug: string };
+}): Promise<Viewport> {
+  const tenant = await getTenantBySlug(params.tenantSlug);
+  return { themeColor: tenant?.data.branding.primaryHex };
 }
 
 export default async function StudentTenantLayout({
