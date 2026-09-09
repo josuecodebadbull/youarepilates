@@ -14,6 +14,8 @@ import type { TenantDoc } from "@/lib/types/firestore";
 const NAV_ITEMS = [
   { href: "/admin", label: "Resumen" },
   { href: "/admin/sedes", label: "Sedes" },
+  { href: "/admin/tipos-de-clase", label: "Tipos de clase" },
+  { href: "/admin/instructores", label: "Instructores" },
   { href: "/admin/horarios", label: "Horarios" },
   { href: "/admin/paquetes", label: "Paquetes" },
 ];
