@@ -13,6 +13,10 @@ import {
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import type { BranchDoc } from "@/lib/types/firestore";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { FormField, inputClass } from "@/components/ui/FormField";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 interface Branch extends BranchDoc {
   id: string;
@@ -21,9 +25,8 @@ interface Branch extends BranchDoc {
 export default function SedesPage() {
   const { tenantId } = useTenant();
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
 
   useEffect(() => {
     const branchesQuery = query(
@@ -34,8 +37,51 @@ export default function SedesPage() {
       setBranches(
         snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as BranchDoc) })),
       );
+      setLoaded(true);
     });
   }, [tenantId]);
+
+  return (
+    <div>
+      <PageHeader
+        title="Sedes"
+        description="Las sucursales físicas de tu estudio. Cada alumno elige una sede al reservar, y cada sede tiene sus propias salas y horarios."
+        action={
+          !formOpen && (
+            <Button onClick={() => setFormOpen(true)}>+ Agregar sede</Button>
+          )
+        }
+      />
+
+      {formOpen && (
+        <BranchForm tenantId={tenantId} onDone={() => setFormOpen(false)} />
+      )}
+
+      {loaded && branches.length === 0 && !formOpen ? (
+        <EmptyState
+          icon="🏢"
+          title="Todavía no tienes sedes"
+          description="Agrega tu primera sede para poder crear salas y programar horarios de clases."
+          action={<Button onClick={() => setFormOpen(true)}>+ Agregar mi primera sede</Button>}
+        />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {branches.map((branch) => (
+            <div key={branch.id} className="rounded-lg border border-gray-200 p-5">
+              <p className="font-medium text-gray-900">{branch.name}</p>
+              <p className="mt-1 text-sm text-gray-500">{branch.address}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BranchForm({ tenantId, onDone }: { tenantId: string; onDone: () => void }) {
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -46,53 +92,59 @@ export default function SedesPage() {
         address,
         createdAt: serverTimestamp(),
       });
-      setName("");
-      setAddress("");
+      onDone();
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold">Sedes</h1>
+    <form
+      onSubmit={handleSubmit}
+      className="mb-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5"
+    >
+      <h2 className="font-semibold text-gray-900">Nueva sede</h2>
 
-      <ul className="mt-6 divide-y divide-gray-200 rounded-lg border border-gray-200">
-        {branches.map((branch) => (
-          <li key={branch.id} className="p-4">
-            <p className="font-medium">{branch.name}</p>
-            <p className="text-sm text-gray-500">{branch.address}</p>
-          </li>
-        ))}
-        {branches.length === 0 && (
-          <li className="p-4 text-sm text-gray-500">Todavía no hay sedes creadas.</li>
-        )}
-      </ul>
-
-      <form onSubmit={handleSubmit} className="mt-8 max-w-sm space-y-3">
-        <h2 className="font-semibold">Agregar sede</h2>
+      <FormField
+        label="Nombre de la sede"
+        htmlFor="branch-name"
+        hint="Así la verán tus alumnos al elegir dónde tomar su clase. Ejemplo: Sucursal Condesa"
+        required
+      >
         <input
+          id="branch-name"
           required
-          placeholder="Nombre (ej. Sucursal Condesa)"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          placeholder="Sucursal Condesa"
+          className={inputClass}
         />
+      </FormField>
+
+      <FormField
+        label="Dirección"
+        htmlFor="branch-address"
+        hint="Dirección completa, para que tus alumnos sepan cómo llegar"
+        required
+      >
         <input
+          id="branch-address"
           required
-          placeholder="Dirección"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          placeholder="Av. Michoacán 123, Roma Norte, CDMX"
+          className={inputClass}
         />
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
-        >
-          {submitting ? "Guardando..." : "Agregar sede"}
-        </button>
-      </form>
-    </div>
+      </FormField>
+
+      <div className="flex gap-2">
+        <Button type="submit" disabled={submitting}>
+          {submitting ? "Guardando..." : "Guardar sede"}
+        </Button>
+        <Button type="button" variant="ghost" onClick={onDone}>
+          Cancelar
+        </Button>
+      </div>
+    </form>
   );
 }
