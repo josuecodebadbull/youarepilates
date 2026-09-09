@@ -6,17 +6,19 @@ import { TriangleAlert } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
+import { DEFAULT_TENANT_WAIVER } from "@/lib/tenantWaiver";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function ResponsivaPage() {
   const { tenantId, tenant } = useTenant();
-  const [text, setText] = useState(tenant.waiver.text);
+  const waiver = tenant.waiver ?? DEFAULT_TENANT_WAIVER;
+  const [text, setText] = useState(waiver.text);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
 
-  const textChanged = text !== tenant.waiver.text;
+  const textChanged = text !== waiver.text;
 
   async function handleSave(bumpVersion: boolean) {
     setSaving(true);
@@ -25,7 +27,7 @@ export default function ResponsivaPage() {
       await updateDoc(doc(db, "tenants", tenantId), {
         waiver: {
           text,
-          version: bumpVersion ? tenant.waiver.version + 1 : tenant.waiver.version,
+          version: bumpVersion ? waiver.version + 1 : waiver.version,
         },
       });
       setSaved(
@@ -55,7 +57,7 @@ export default function ResponsivaPage() {
       </div>
 
       <div className="mt-6 space-y-4 rounded-xl border border-gray-200 bg-white p-5">
-        <p className="text-sm text-ink-soft">Versión actual: {tenant.waiver.version}</p>
+        <p className="text-sm text-ink-soft">Versión actual: {waiver.version}</p>
 
         <FormField
           label="Texto de la carta responsiva"

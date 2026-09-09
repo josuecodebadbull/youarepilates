@@ -16,6 +16,7 @@ import { CheckCircle2 } from "lucide-react";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useTenant } from "@/lib/tenant/TenantProvider";
+import { DEFAULT_TENANT_WAIVER } from "@/lib/tenantWaiver";
 import type { StudentPassDoc, UserDoc, WaiverSignatureDoc } from "@/lib/types/firestore";
 import { Button } from "@/components/ui/Button";
 import { FormField, inputClass } from "@/components/ui/FormField";
@@ -26,6 +27,7 @@ interface Pass extends StudentPassDoc {
 
 export default function PerfilPage() {
   const { tenantId, tenant } = useTenant();
+  const waiver = tenant.waiver ?? DEFAULT_TENANT_WAIVER;
   const { user } = useAuth();
   const [passes, setPasses] = useState<Pass[]>([]);
   const [profile, setProfile] = useState<UserDoc | null>(null);
@@ -55,19 +57,19 @@ export default function PerfilPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (tenant.waiver.version === 0) {
+    if (waiver.version === 0) {
       setSignature(null);
       return;
     }
     const signatureQuery = query(
       collection(db, "tenants", tenantId, "waiverSignatures"),
       where("studentId", "==", user.uid),
-      where("version", "==", tenant.waiver.version),
+      where("version", "==", waiver.version),
     );
     return onSnapshot(signatureQuery, (snap) => {
       setSignature(snap.empty ? null : (snap.docs[0]!.data() as WaiverSignatureDoc));
     });
-  }, [tenantId, user, tenant.waiver.version]);
+  }, [tenantId, user, waiver.version]);
 
   if (!user) {
     return <p className="text-sm text-gray-500">Inicia sesión para ver tu perfil.</p>;
@@ -101,12 +103,12 @@ export default function PerfilPage() {
         </ul>
       </section>
 
-      {tenant.waiver.version > 0 && (
+      {waiver.version > 0 && (
         <WaiverSection
           tenantId={tenantId}
           studentId={user.uid}
-          waiverText={tenant.waiver.text}
-          waiverVersion={tenant.waiver.version}
+          waiverText={waiver.text}
+          waiverVersion={waiver.version}
           signature={signature}
           defaultName={profile?.displayName ?? ""}
         />

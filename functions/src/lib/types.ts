@@ -29,7 +29,8 @@ export interface TenantDoc {
   };
   subscriptionStatus: SubscriptionStatus;
   createdAt: Timestamp;
-  waiver: {
+  /** Optional: tenants created before this feature existed don't have it yet. */
+  waiver?: {
     text: string;
     version: number;
   };

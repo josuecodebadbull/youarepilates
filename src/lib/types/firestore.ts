@@ -38,9 +38,12 @@ export interface TenantDoc {
   /**
    * Liability waiver text and its version. `version` increments every time the owner
    * edits the text from the admin — a signature only counts for the version it was
-   * signed against, so a text change requires everyone to re-sign.
+   * signed against, so a text change requires everyone to re-sign. Optional because
+   * tenants created before this feature existed don't have it yet — always read
+   * through `DEFAULT_TENANT_WAIVER` (src/lib/tenantWaiver.ts) rather than assuming it
+   * exists. A missing/version-0 waiver means "no signature required yet".
    */
-  waiver: {
+  waiver?: {
     text: string;
     version: number;
   };

@@ -102,17 +102,18 @@ export default function ClassExplorerPage() {
       setWaiverSigned(null);
       return;
     }
-    if (tenant.waiver.version === 0) {
+    const waiverVersion = tenant.waiver?.version ?? 0;
+    if (waiverVersion === 0) {
       setWaiverSigned(true);
       return;
     }
     const signatureQuery = query(
       collection(db, "tenants", tenantId, "waiverSignatures"),
       where("studentId", "==", user.uid),
-      where("version", "==", tenant.waiver.version),
+      where("version", "==", waiverVersion),
     );
     return onSnapshot(signatureQuery, (snap) => setWaiverSigned(!snap.empty));
-  }, [tenantId, user, tenant.waiver.version]);
+  }, [tenantId, user, tenant.waiver?.version]);
 
   const daySchedules = useMemo(() => {
     return schedules.filter((s) => {

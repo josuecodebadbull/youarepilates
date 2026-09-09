@@ -60,13 +60,16 @@ export const bookClassSession = onCall<BookClassSessionInput>(async (request) =>
     const tenant = tenantSnap.data() as TenantDoc;
 
     // Carta responsiva firmada — verificación real, no solo en el cliente: sin esto
-    // cualquiera podría saltarse la firma llamando la función directamente.
-    if (tenant.waiver.version > 0) {
+    // cualquiera podría saltarse la firma llamando la función directamente. Un tenant
+    // creado antes de esta funcionalidad no tiene `waiver` todavía, lo cual equivale a
+    // "no requiere firma".
+    const waiverVersion = tenant.waiver?.version ?? 0;
+    if (waiverVersion > 0) {
       const signatureSnap = await tx.get(
         tenantRef
           .collection("waiverSignatures")
           .where("studentId", "==", studentId)
-          .where("version", "==", tenant.waiver.version)
+          .where("version", "==", waiverVersion)
           .limit(1),
       );
       if (signatureSnap.empty) {
