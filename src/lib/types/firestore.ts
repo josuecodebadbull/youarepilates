@@ -35,6 +35,15 @@ export interface TenantDoc {
   };
   subscriptionStatus: SubscriptionStatus;
   createdAt: Timestamp;
+  /**
+   * Liability waiver text and its version. `version` increments every time the owner
+   * edits the text from the admin — a signature only counts for the version it was
+   * signed against, so a text change requires everyone to re-sign.
+   */
+  waiver: {
+    text: string;
+    version: number;
+  };
 }
 
 export interface BranchDoc {
@@ -82,6 +91,8 @@ export interface ScheduleDoc {
   bookedCount: number;
   waitlistCount: number;
   status: ScheduleStatus;
+  /** Spot numbers already claimed by a confirmed booking — lets students pick a free one. */
+  takenSpots: number[];
 }
 
 export interface BookingDoc {
@@ -134,4 +145,33 @@ export interface UserDoc {
   emergencyContact: EmergencyContact | null;
   /** Count of attended basic-level classes, used by the advanced-class gating rule. */
   validatedBasicClasses: number;
+}
+
+/** One immutable record per signature — the audit trail proving a student accepted a
+ * specific version of the tenant's liability waiver, and when. Never updated or deleted. */
+export interface WaiverSignatureDoc {
+  studentId: string;
+  version: number;
+  fullNameTyped: string;
+  signedAt: Timestamp;
+}
+
+export type PurchaseIntentStatus = "pending" | "paid" | "failed";
+
+/**
+ * A student's self-serve "quiero comprar este paquete" request. No real payment gateway
+ * is wired up yet — status stays "pending" until staff confirms the payment received in
+ * person (cash/transfer/terminal) from /admin, which is what actually creates the
+ * StudentPassDoc and flips this to "paid".
+ */
+export interface PurchaseIntentDoc {
+  tenantId: string;
+  studentId: string;
+  packageId: string;
+  packageName: string;
+  creditAmount: number;
+  price: number;
+  validityDays: number;
+  status: PurchaseIntentStatus;
+  createdAt: Timestamp;
 }

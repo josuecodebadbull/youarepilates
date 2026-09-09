@@ -1,12 +1,21 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  Timestamp,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useTenant } from "@/lib/tenant/TenantProvider";
-import type { StudentPassDoc, UserDoc } from "@/lib/types/firestore";
+import type { StudentPassDoc, UserDoc, WaiverSignatureDoc } from "@/lib/types/firestore";
 import { Button } from "@/components/ui/Button";
 import { FormField, inputClass } from "@/components/ui/FormField";
 
@@ -15,10 +24,11 @@ interface Pass extends StudentPassDoc {
 }
 
 export default function PerfilPage() {
-  const { tenantId } = useTenant();
+  const { tenantId, tenant } = useTenant();
   const { user } = useAuth();
   const [passes, setPasses] = useState<Pass[]>([]);
   const [profile, setProfile] = useState<UserDoc | null>(null);
+  const [signature, setSignature] = useState<WaiverSignatureDoc | null | undefined>(undefined);
 
   useEffect(() => {
     if (!user) return;
@@ -41,6 +51,22 @@ export default function PerfilPage() {
       unsubProfile();
     };
   }, [tenantId, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (tenant.waiver.version === 0) {
+      setSignature(null);
+      return;
+    }
+    const signatureQuery = query(
+      collection(db, "tenants", tenantId, "waiverSignatures"),
+      where("studentId", "==", user.uid),
+      where("version", "==", tenant.waiver.version),
+    );
+    return onSnapshot(signatureQuery, (snap) => {
+      setSignature(snap.empty ? null : (snap.docs[0]!.data() as WaiverSignatureDoc));
+    });
+  }, [tenantId, user, tenant.waiver.version]);
 
   if (!user) {
     return <p className="text-sm text-gray-500">Inicia sesión para ver tu perfil.</p>;
@@ -74,8 +100,124 @@ export default function PerfilPage() {
         </ul>
       </section>
 
+      {tenant.waiver.version > 0 && (
+        <WaiverSection
+          tenantId={tenantId}
+          studentId={user.uid}
+          waiverText={tenant.waiver.text}
+          waiverVersion={tenant.waiver.version}
+          signature={signature}
+          defaultName={profile?.displayName ?? ""}
+        />
+      )}
+
       {profile && <PersonalInfoForm userId={user.uid} profile={profile} />}
     </div>
+  );
+}
+
+function WaiverSection({
+  tenantId,
+  studentId,
+  waiverText,
+  waiverVersion,
+  signature,
+  defaultName,
+}: {
+  tenantId: string;
+  studentId: string;
+  waiverText: string;
+  waiverVersion: number;
+  signature: WaiverSignatureDoc | null | undefined;
+  defaultName: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [fullName, setFullName] = useState(defaultName);
+  const [accepted, setAccepted] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (signature === undefined) {
+    return null; // loading
+  }
+
+  if (signature) {
+    return (
+      <section className="rounded-xl border border-brand-200 bg-brand-50 p-5">
+        <p className="font-semibold text-brand-900">✓ Carta responsiva firmada</p>
+        <p className="mt-1 text-sm text-brand-800">
+          Firmada por {signature.fullNameTyped} el{" "}
+          {signature.signedAt.toDate().toLocaleDateString("es-MX")} (versión {signature.version}).
+        </p>
+      </section>
+    );
+  }
+
+  async function handleSign(event: FormEvent) {
+    event.preventDefault();
+    if (!accepted || !fullName.trim()) return;
+
+    setError(null);
+    setSigning(true);
+    try {
+      await addDoc(collection(db, "tenants", tenantId, "waiverSignatures"), {
+        studentId,
+        version: waiverVersion,
+        fullNameTyped: fullName.trim(),
+        signedAt: Timestamp.now(),
+      } satisfies WaiverSignatureDoc);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar tu firma.");
+    } finally {
+      setSigning(false);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+      <p className="font-semibold text-amber-900">Carta responsiva pendiente de firmar</p>
+      <p className="mt-1 text-sm text-amber-800">
+        Debes leerla y firmarla antes de poder reservar una clase.
+      </p>
+
+      {!expanded ? (
+        <Button onClick={() => setExpanded(true)} className="mt-3">
+          Leer y firmar
+        </Button>
+      ) : (
+        <form onSubmit={handleSign} className="mt-3 space-y-3">
+          <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-amber-200 bg-white p-3 font-sans text-xs text-ink">
+            {waiverText}
+          </pre>
+
+          <FormField label="Nombre completo (como firma)" htmlFor="waiver-name" required>
+            <input
+              id="waiver-name"
+              required
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className={inputClass}
+            />
+          </FormField>
+
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+              className="mt-0.5"
+            />
+            He leído y acepto los términos de la carta responsiva.
+          </label>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <Button type="submit" disabled={signing || !accepted || !fullName.trim()}>
+            {signing ? "Firmando..." : "Firmar"}
+          </Button>
+        </form>
+      )}
+    </section>
   );
 }
 

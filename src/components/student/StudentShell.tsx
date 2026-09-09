@@ -36,6 +36,15 @@ function UserIcon({ active }: { active: boolean }) {
   );
 }
 
+function TagIcon({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8}>
+      <path d="M12.5 3.5h6a1 1 0 0 1 1 1v6a1 1 0 0 1-.3.7l-9 9a1 1 0 0 1-1.4 0l-6-6a1 1 0 0 1 0-1.4l9-9a1 1 0 0 1 .7-.3Z" />
+      <circle cx={16.5} cy={7.5} r={1.2} fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function StudentShell({ children }: { children: ReactNode }) {
   const { tenant } = useTenant();
   const { user } = useAuth();
@@ -45,6 +54,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
   const navItems = [
     { href: base, label: "Reservar", icon: CalendarIcon },
     { href: `${base}/mis-clases`, label: "Mis clases", icon: TicketIcon },
+    { href: `${base}/precios`, label: "Precios", icon: TagIcon },
     { href: `${base}/perfil`, label: "Perfil", icon: UserIcon },
   ];
 

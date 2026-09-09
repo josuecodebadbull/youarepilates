@@ -29,12 +29,23 @@ export interface TenantDoc {
   };
   subscriptionStatus: SubscriptionStatus;
   createdAt: Timestamp;
+  waiver: {
+    text: string;
+    version: number;
+  };
 }
 
 export interface ClassTypeDoc {
   name: string;
   requiredCredits: number;
   level: ClassLevel;
+}
+
+export interface RoomDoc {
+  name: string;
+  capacity: number;
+  spots: { spotNumber: number; label: string }[];
+  blockedSpots: number[];
 }
 
 export interface ScheduleDoc {
@@ -48,6 +59,14 @@ export interface ScheduleDoc {
   bookedCount: number;
   waitlistCount: number;
   status: ScheduleStatus;
+  takenSpots: number[];
+}
+
+export interface WaiverSignatureDoc {
+  studentId: string;
+  version: number;
+  fullNameTyped: string;
+  signedAt: Timestamp;
 }
 
 export interface BookingDoc {

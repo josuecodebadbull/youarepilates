@@ -78,9 +78,15 @@ export const cancelBookingSession = onCall<CancelBookingInput>(async (request) =
     const newStatus = isOnTime ? "canceled" : "canceled_late";
     tx.update(bookingRef, { status: newStatus, canceledAt: Timestamp.now() });
 
+    const takenSpotsAfterCancel =
+      booking.spotNumber !== null
+        ? (schedule.takenSpots ?? []).filter((s) => s !== booking.spotNumber)
+        : (schedule.takenSpots ?? []);
+
     const scheduleAfterCancel: ScheduleDoc = {
       ...schedule,
       bookedCount: Math.max(0, schedule.bookedCount - 1),
+      takenSpots: takenSpotsAfterCancel,
     };
 
     const final =
@@ -88,7 +94,11 @@ export const cancelBookingSession = onCall<CancelBookingInput>(async (request) =
         ? await promoteNextWaitlistEntry(tx, tenantRef, scheduleRef, scheduleAfterCancel)
         : { bookedCount: scheduleAfterCancel.bookedCount, waitlistCount: scheduleAfterCancel.waitlistCount };
 
-    tx.update(scheduleRef, { bookedCount: final.bookedCount, waitlistCount: final.waitlistCount });
+    tx.update(scheduleRef, {
+      bookedCount: final.bookedCount,
+      waitlistCount: final.waitlistCount,
+      takenSpots: takenSpotsAfterCancel,
+    });
 
     return { status: newStatus, creditRefunded };
   });

@@ -1,6 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 import { adminAuth, adminDb, Timestamp } from "../lib/admin";
+import { DEFAULT_WAIVER_TEXT } from "../lib/defaultWaiver";
 import type { AuthClaims, TenantDoc } from "../lib/types";
 
 interface OnboardTenantInput {
@@ -61,6 +62,7 @@ export const onboardTenant = onCall<OnboardTenantInput>(async (request) => {
     settings: { cancelWindowHours: 2, lateCancelPenaltyCredits: 1, minBasicClassesForAdvanced: 8 },
     subscriptionStatus: "active",
     createdAt: Timestamp.now(),
+    waiver: { text: DEFAULT_WAIVER_TEXT, version: 1 },
   };
 
   await tenantRef.set(tenant);

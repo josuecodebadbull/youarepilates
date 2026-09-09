@@ -20,6 +20,8 @@ const NAV_ITEMS = [
   { href: "/admin/horarios", label: "Horarios" },
   { href: "/admin/paquetes", label: "Paquetes" },
   { href: "/admin/alumnos", label: "Alumnos" },
+  { href: "/admin/pagos", label: "Pagos" },
+  { href: "/admin/responsiva", label: "Responsiva" },
 ];
 
 export function AdminShell({ children }: { children: ReactNode }) {

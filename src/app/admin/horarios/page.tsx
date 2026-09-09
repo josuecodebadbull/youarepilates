@@ -347,6 +347,7 @@ function ScheduleForm({
           bookedCount: 0,
           waitlistCount: 0,
           status: "scheduled",
+          takenSpots: [],
         } satisfies ScheduleDoc);
       }
 

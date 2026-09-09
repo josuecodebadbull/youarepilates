@@ -107,17 +107,36 @@ service cloud.firestore {
           || (isAuthenticated() && resource.data.studentId == request.auth.uid);
         allow write: if isTenantStaff(tenantId) || isSuperAdmin();
       }
+
+      // Liability waiver signatures: an immutable per-signature audit trail. A student
+      // may only create their own record, and only for the tenant's *current* waiver
+      // version (no backdating a signature to an old version). Never updatable or
+      // deletable by anyone — that's the point of an audit trail.
+      match /waiverSignatures/{signatureId} {
+        allow read: if isStaffOrInstructor(tenantId)
+          || (isAuthenticated() && resource.data.studentId == request.auth.uid);
+        allow create: if isAuthenticated()
+          && request.resource.data.studentId == request.auth.uid
+          && request.resource.data.version == get(/databases/$(database)/documents/tenants/$(tenantId)).data.waiver.version;
+        allow update, delete: if false;
+      }
     }
 
-    // Pending Mercado Pago purchases: a student may create their own pending intent
-    // right before checkout redirect, but only the webhook (Admin SDK, bypasses rules)
-    // may ever mark one "paid".
+    // Self-serve "quiero comprar este paquete" requests. No real payment gateway is
+    // wired up yet: a student creates their own pending intent, and staff (or the
+    // Mercado Pago webhook via Admin SDK, once that's built) confirms it — flipping it
+    // to paid/failed. Confirming also creates the actual studentPass as a separate
+    // write from the admin UI; nothing here does that atomically for the client path,
+    // so treat "paid" as advisory bookkeeping, not the source of truth for credits.
     match /purchaseIntents/{purchaseId} {
-      allow read: if isAuthenticated() && resource.data.studentId == request.auth.uid;
+      allow read: if (isAuthenticated() && resource.data.studentId == request.auth.uid)
+        || isTenantStaff(resource.data.tenantId);
       allow create: if isAuthenticated()
         && request.resource.data.studentId == request.auth.uid
         && request.resource.data.status == 'pending';
-      allow update, delete: if false;
+      allow update: if isTenantStaff(resource.data.tenantId)
+        && request.resource.data.status in ['paid', 'failed'];
+      allow delete: if false;
     }
 
     match /users/{userId} {
