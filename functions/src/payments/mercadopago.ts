@@ -1,10 +1,7 @@
 import { onRequest } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
 
 import { adminDb, Timestamp } from "../lib/admin";
 import type { PassStatus } from "../lib/types";
-
-const mercadoPagoAccessToken = defineSecret("MERCADOPAGO_ACCESS_TOKEN");
 
 interface PendingPurchaseDoc {
   tenantId: string;
@@ -30,13 +27,21 @@ interface MercadoPagoPayment {
  *   TODO: the checkout flow that creates the MP Preference (with
  *         `external_reference = "<purchaseIntentId>"`) and the corresponding
  *         `purchaseIntents/{id}` pending doc still needs to be built (Fase 4/5).
+ *   TODO: once real Mercado Pago integration starts, move the access token to
+ *         Secret Manager via `defineSecret` — using a plain env var here on purpose
+ *         so this function doesn't block `firebase deploy --only functions` with an
+ *         interactive "create this secret" prompt before it's actually wired up.
  *
  * What IS real here: idempotent handling (a payment id already marked "paid" is a
  * no-op on retry) and the actual studentPass creation once a payment is approved.
  */
-export const mercadopagoWebhook = onRequest(
-  { secrets: [mercadoPagoAccessToken] },
-  async (req, res) => {
+export const mercadopagoWebhook = onRequest(async (req, res) => {
+    const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+    if (!accessToken) {
+      res.status(501).send("Mercado Pago no está configurado todavía.");
+      return;
+    }
+
     const paymentId = req.query["data.id"] ?? req.body?.data?.id;
     if (!paymentId) {
       res.status(200).send("ignored: no payment id");
@@ -44,7 +49,7 @@ export const mercadopagoWebhook = onRequest(
     }
 
     const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-      headers: { Authorization: `Bearer ${mercadoPagoAccessToken.value()}` },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (!paymentResponse.ok) {
@@ -86,5 +91,4 @@ export const mercadopagoWebhook = onRequest(
     });
 
     res.status(200).send("ok");
-  },
-);
+});
