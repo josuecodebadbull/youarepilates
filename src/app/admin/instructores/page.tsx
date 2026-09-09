@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { addDoc, collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { addDoc, collection, onSnapshot, orderBy, query, updateDoc } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 
-import { db } from "@/lib/firebase/client";
+import { db, storage } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import type { InstructorDoc } from "@/lib/types/firestore";
+import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FormField, inputClass } from "@/components/ui/FormField";
@@ -58,18 +60,21 @@ export default function InstructoresPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {instructors.map((instructor) => (
-            <div key={instructor.id} className="rounded-lg border border-gray-200 p-5">
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-medium text-gray-900">{instructor.name}</p>
-                {!instructor.active && (
-                  <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
-                    Inactivo
-                  </span>
+            <div key={instructor.id} className="flex gap-4 rounded-lg border border-gray-200 p-5">
+              <Avatar name={instructor.name} photoUrl={instructor.photoUrl} size={48} />
+              <div className="min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-medium text-gray-900">{instructor.name}</p>
+                  {!instructor.active && (
+                    <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+                      Inactivo
+                    </span>
+                  )}
+                </div>
+                {instructor.bio && (
+                  <p className="mt-1 text-sm text-gray-600">{instructor.bio}</p>
                 )}
               </div>
-              {instructor.bio && (
-                <p className="mt-2 text-sm text-gray-600">{instructor.bio}</p>
-              )}
             </div>
           ))}
         </div>
@@ -81,18 +86,37 @@ export default function InstructoresPage() {
 function InstructorForm({ tenantId, onDone }: { tenantId: string; onDone: () => void }) {
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function handlePhotoChange(file: File | null) {
+    setPhotoFile(file);
+    setPhotoPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setSubmitting(true);
     try {
-      await addDoc(collection(db, "tenants", tenantId, "instructors"), {
+      const docRef = await addDoc(collection(db, "tenants", tenantId, "instructors"), {
         name,
         bio,
         photoUrl: null,
         active: true,
       } satisfies InstructorDoc);
+
+      if (photoFile) {
+        const photoRef = ref(storage, `tenants/${tenantId}/instructors/${docRef.id}/photo`);
+        await uploadBytes(photoRef, photoFile, { contentType: photoFile.type });
+        const photoUrl = await getDownloadURL(photoRef);
+        await updateDoc(docRef, { photoUrl });
+      }
+
+      if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
       onDone();
     } finally {
       setSubmitting(false);
@@ -105,6 +129,23 @@ function InstructorForm({ tenantId, onDone }: { tenantId: string; onDone: () => 
       className="mb-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5"
     >
       <h2 className="font-semibold text-gray-900">Nuevo instructor</h2>
+
+      <div className="flex items-center gap-4">
+        <Avatar name={name || "?"} photoUrl={photoPreviewUrl} size={56} />
+        <FormField
+          label="Foto de perfil"
+          htmlFor="instructor-photo"
+          hint="Opcional — si no subes una, se genera un avatar con sus iniciales"
+        >
+          <input
+            id="instructor-photo"
+            type="file"
+            accept="image/*"
+            onChange={(e) => handlePhotoChange(e.target.files?.[0] ?? null)}
+            className="text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-gray-900 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-gray-700"
+          />
+        </FormField>
+      </div>
 
       <FormField
         label="Nombre completo"
@@ -136,11 +177,6 @@ function InstructorForm({ tenantId, onDone }: { tenantId: string; onDone: () => 
           className={inputClass}
         />
       </FormField>
-
-      <p className="text-xs text-gray-500">
-        La foto de perfil se podrá subir próximamente — por ahora el instructor se
-        crea sin foto.
-      </p>
 
       <div className="flex gap-2">
         <Button type="submit" disabled={submitting}>

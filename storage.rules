@@ -24,6 +24,15 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // Instructor photos: public read (shown to prospective students on the public
+    // class explorer, before login), staff-only write.
+    match /tenants/{tenantId}/instructors/{instructorId}/{fileName} {
+      allow read: if true;
+      allow write: if isTenantStaff(tenantId)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
     // Student avatars: public-ish read within the app (instructor roster shows them),
     // writable only by the student themselves.
     match /tenants/{tenantId}/avatars/{userId} {
