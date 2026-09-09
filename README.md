@@ -10,14 +10,18 @@ multi-tenant y PWA de alumnos, sobre Next.js + Firebase.
   - `/admin/**` — panel ERP (dueño/staff/instructor), protegido por rol
   - `/s/[tenantSlug]/**` — PWA instalable del alumno, una por estudio
 - **Multi-tenant por slug en el path** (`/s/pilates-flow-roma`), no por subdominio — cero
-  configuración de DNS/SSL extra y funciona en Firebase Hosting/App Hosting desde el día 1.
-  Migrar a subdominio después solo implica cambiar `resolveTenant.ts`.
+  configuración de DNS/SSL extra y funciona en Firebase Hosting desde el día 1. Migrar a
+  subdominio después solo implica cambiar `resolveTenant.ts`.
 - **Mercado Pago** para cobros a alumnos (créditos/paquetes) — mejor cobertura de medios de
   pago locales. **Stripe** queda reservado para la facturación SaaS B2B a los dueños de
   estudio (Fase 5, no implementado todavía).
-- **Firebase App Hosting** (no Hosting clásico + Cloud Function manual) para servir el SSR
-  de Next.js — es el camino soportado actualmente por Firebase para Next.js con SSR real.
-  Ver `apphosting.yaml`. `firebase.json` solo versiona Firestore/Storage/Functions.
+- **Firebase Hosting clásico con la integración de Next.js ("web frameworks")** para
+  servir el SSR — se despliega con `firebase deploy --only hosting` y queda en el dominio
+  por defecto del proyecto (`https://youarepilates-e202c.web.app`). Configurado en el
+  bloque `hosting` de `firebase.json` (`frameworksBackend`); no usa Cloud Function manual
+  ni App Hosting. Las credenciales del Admin SDK del lado servidor no hacen falta en
+  producción: `src/lib/firebase/admin.ts` cae automáticamente a Application Default
+  Credentials, que la Cloud Function desplegada ya trae del propio proyecto.
 
 ### Dos correcciones importantes al spec original
 
@@ -77,8 +81,8 @@ functions/src/waitlist/       # promoción de lista de espera
 functions/src/tenants/        # onboardTenant, registerStudent
 functions/src/payments/       # webhook de Mercado Pago (scaffold)
 firestore.rules / .indexes.json / storage.rules
-firebase.json                 # Firestore/Storage/Functions + emuladores
-apphosting.yaml                # config de Firebase App Hosting para el Next.js
+firebase.json                 # Hosting (Next.js) + Firestore/Storage/Functions + emuladores
+.env.production                # config pública del SDK web para el build de producción
 ```
 
 ## Cómo correrlo
@@ -100,3 +104,23 @@ apphosting.yaml                # config de Firebase App Hosting para el Next.js
 
 `npm run build` (raíz) y `npm run build` (en `functions/`) ya se verificaron sin errores
 de tipos ni de build en este scaffold.
+
+## Cómo desplegar (producción)
+
+El proyecto real es `youarepilates-e202c` y ya tiene Firebase Hosting habilitado en su
+dominio por defecto (`youarepilates-e202c.web.app`). Para desplegar:
+
+1. `.firebaserc` debe apuntar a ese proyecto (`{"projects": {"default": "youarepilates-e202c"}}` —
+   no se versiona, cada quien lo genera con `firebase use youarepilates-e202c --add`).
+2. Si es la primera vez que este CLI despliega Next.js a Hosting, habilita la integración:
+   `firebase experiments:enable webframeworks` (en CLIs recientes ya viene activada por
+   default y el comando no hace falta).
+3. `firebase deploy --only hosting` — construye el Next.js (usa `.env.production`, que sí
+   se versiona porque son claves públicas del SDK web) y lo publica en
+   `https://youarepilates-e202c.web.app`.
+4. Cuando cambien reglas/índices o Cloud Functions, despliega esas partes aparte:
+   `firebase deploy --only firestore:rules,firestore:indexes` y
+   `firebase deploy --only functions`.
+
+No hace falta configurar credenciales del Admin SDK para este deploy: la Cloud Function
+que sirve el SSR corre con las Application Default Credentials del propio proyecto.
