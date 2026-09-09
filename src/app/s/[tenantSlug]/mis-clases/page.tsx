@@ -129,13 +129,13 @@ export default function MisClasesPage() {
       <div className="mt-3 inline-flex rounded-md border border-gray-200 bg-white p-0.5 text-sm">
         <button
           onClick={() => setTab("proximas")}
-          className={`rounded px-3 py-1 ${tab === "proximas" ? "bg-gray-900 text-white" : "text-gray-600"}`}
+          className={`rounded px-3 py-1 ${tab === "proximas" ? "bg-brand-700 text-white" : "text-gray-600"}`}
         >
           Próximas
         </button>
         <button
           onClick={() => setTab("historial")}
-          className={`rounded px-3 py-1 ${tab === "historial" ? "bg-gray-900 text-white" : "text-gray-600"}`}
+          className={`rounded px-3 py-1 ${tab === "historial" ? "bg-brand-700 text-white" : "text-gray-600"}`}
         >
           Historial
         </button>

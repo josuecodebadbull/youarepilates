@@ -181,13 +181,13 @@ export default function HorariosPage() {
             <div className="inline-flex rounded-md border border-gray-200 p-0.5 text-sm">
               <button
                 onClick={() => setView("calendar")}
-                className={`rounded px-3 py-1 ${view === "calendar" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                className={`rounded px-3 py-1 ${view === "calendar" ? "bg-brand-700 text-white" : "text-gray-600 hover:bg-gray-50"}`}
               >
                 Calendario
               </button>
               <button
                 onClick={() => setView("list")}
-                className={`rounded px-3 py-1 ${view === "list" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                className={`rounded px-3 py-1 ${view === "list" ? "bg-brand-700 text-white" : "text-gray-600 hover:bg-gray-50"}`}
               >
                 Lista
               </button>

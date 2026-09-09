@@ -38,7 +38,7 @@ export function DayPicker({ selected, onSelect, daysAhead = 14 }: DayPickerProps
   );
 
   return (
-    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1" style={{ scrollbarWidth: "none" }}>
+    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
       {days.map((day) => {
         const isSelected = isSameDay(day, selected);
         const isToday = isSameDay(day, today);

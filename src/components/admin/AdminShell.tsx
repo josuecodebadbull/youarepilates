@@ -63,10 +63,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   return (
     <TenantProvider tenantId={claims.tenantId} tenant={tenant}>
-      <div className="min-h-screen md:flex">
+      <div className="min-h-screen bg-canvas md:flex">
         {/* Mobile top bar — hidden on desktop, where the sidebar is always visible instead. */}
         <header className="flex items-center justify-between border-b border-gray-200 bg-white p-4 md:hidden">
-          <p className="truncate font-semibold">{tenant.name}</p>
+          <p className="truncate font-display font-semibold text-ink">{tenant.name}</p>
           <button
             onClick={() => setNavOpen(true)}
             aria-label="Abrir menú"
@@ -88,12 +88,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
         )}
 
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-gray-200 bg-gray-50 p-4 transition-transform duration-200 ease-out md:relative md:z-auto md:w-56 md:shrink-0 md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-gray-200 bg-white p-4 transition-transform duration-200 ease-out md:relative md:z-auto md:w-60 md:shrink-0 md:translate-x-0 ${
             navOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
           <div className="mb-6 flex items-center justify-between">
-            <p className="truncate font-semibold">{tenant.name}</p>
+            <p className="truncate font-display font-semibold text-ink">{tenant.name}</p>
             <button
               onClick={() => setNavOpen(false)}
               aria-label="Cerrar menú"
@@ -110,10 +110,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`block rounded-md px-3 py-2 text-sm ${
+                className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   pathname === item.href
-                    ? "bg-gray-900 text-white"
-                    : "text-gray-700 hover:bg-gray-100"
+                    ? "bg-brand-50 text-brand-800"
+                    : "text-ink-soft hover:bg-gray-100 hover:text-ink"
                 }`}
               >
                 {item.label}
@@ -124,13 +124,13 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
           <button
             onClick={() => signOut(auth)}
-            className="mt-8 text-sm text-gray-500 hover:text-gray-800"
+            className="mt-8 text-sm text-ink-soft hover:text-ink"
           >
             Cerrar sesión
           </button>
         </aside>
 
-        <main className="flex-1 p-4 md:p-8">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>
       </div>
     </TenantProvider>
   );

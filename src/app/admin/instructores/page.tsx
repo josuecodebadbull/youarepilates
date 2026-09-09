@@ -142,7 +142,7 @@ function InstructorForm({ tenantId, onDone }: { tenantId: string; onDone: () => 
             type="file"
             accept="image/*"
             onChange={(e) => handlePhotoChange(e.target.files?.[0] ?? null)}
-            className="text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-gray-900 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-gray-700"
+            className="text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-800"
           />
         </FormField>
       </div>

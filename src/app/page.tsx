@@ -59,14 +59,14 @@ export default function LandingPage() {
     <main>
       <SiteHeader />
 
-      <section className="mx-auto max-w-5xl px-6 pb-16 pt-20 text-center">
-        <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
+      <section className="mx-auto max-w-5xl px-6 pb-16 pt-20 text-center sm:pt-28">
+        <p className="text-sm font-semibold uppercase tracking-wide text-brand-700">
           Software para estudios de Pilates
         </p>
-        <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
+        <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
           Gestiona tu estudio de Pilates sin hojas de cálculo ni WhatsApp
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-lg text-gray-600">
+        <p className="mx-auto mt-6 max-w-2xl text-lg text-ink-soft">
           Agendas, aforos de Reformer, paquetes de créditos y una app de reservas
           para tus alumnos. Todo en una sola plataforma pensada para Pilates, no
           para un gimnasio genérico.
@@ -74,45 +74,47 @@ export default function LandingPage() {
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <Link
             href="/onboarding"
-            className="rounded-md bg-gray-900 px-6 py-3 text-sm font-semibold text-white hover:bg-gray-700"
+            className="rounded-lg bg-brand-700 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-800"
           >
             Crear mi estudio gratis
           </Link>
           <Link
             href="/login"
-            className="rounded-md border border-gray-300 px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+            className="rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-semibold text-ink hover:bg-gray-50"
           >
             Ya tengo una cuenta
           </Link>
         </div>
-        <p className="mt-4 text-xs text-gray-400">
+        <p className="mt-4 text-xs text-ink-faint">
           Sin tarjeta de crédito para empezar. Configura tu estudio en minutos.
         </p>
       </section>
 
       <section id="funciones" className="mx-auto max-w-5xl scroll-mt-20 px-6 pb-24">
-        <h2 className="text-center text-2xl font-bold">Hecho para Pilates, no adaptado de un gimnasio</h2>
-        <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        <h2 className="text-center text-2xl font-semibold text-ink">
+          Hecho para Pilates, no adaptado de un gimnasio
+        </h2>
+        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
-            <div key={feature.title} className="rounded-lg border border-gray-200 p-6">
-              <h3 className="font-semibold">{feature.title}</h3>
-              <p className="mt-2 text-sm text-gray-600">{feature.description}</p>
+            <div key={feature.title} className="rounded-2xl border border-gray-200 bg-white p-6 shadow-card">
+              <h3 className="font-semibold text-ink">{feature.title}</h3>
+              <p className="mt-2 text-sm text-ink-soft">{feature.description}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <section id="como-funciona" className="scroll-mt-20 bg-gray-50 py-24">
+      <section id="como-funciona" className="scroll-mt-20 bg-white py-24">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="text-center text-2xl font-bold">Cómo funciona</h2>
+          <h2 className="text-center text-2xl font-semibold text-ink">Cómo funciona</h2>
           <div className="mt-10 grid gap-10 sm:grid-cols-3">
             {steps.map((step) => (
               <div key={step.number} className="text-center sm:text-left">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-sm font-semibold text-white">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-sm font-semibold text-white">
                   {step.number}
                 </span>
-                <h3 className="mt-4 font-semibold">{step.title}</h3>
-                <p className="mt-2 text-sm text-gray-600">{step.description}</p>
+                <h3 className="mt-4 font-semibold text-ink">{step.title}</h3>
+                <p className="mt-2 text-sm text-ink-soft">{step.description}</p>
               </div>
             ))}
           </div>
@@ -120,26 +122,28 @@ export default function LandingPage() {
       </section>
 
       <section className="mx-auto max-w-3xl px-6 py-24 text-center">
-        <h2 className="text-2xl font-bold">¿Listo para dejar el WhatsApp y las hojas de cálculo?</h2>
-        <p className="mt-4 text-gray-600">
+        <h2 className="text-2xl font-semibold text-ink">
+          ¿Listo para dejar el WhatsApp y las hojas de cálculo?
+        </h2>
+        <p className="mt-4 text-ink-soft">
           Crea tu estudio gratis y prueba el panel completo hoy mismo.
         </p>
         <Link
           href="/onboarding"
-          className="mt-8 inline-block rounded-md bg-gray-900 px-6 py-3 text-sm font-semibold text-white hover:bg-gray-700"
+          className="mt-8 inline-block rounded-lg bg-brand-700 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-800"
         >
           Crear mi estudio gratis
         </Link>
       </section>
 
-      <footer className="border-t border-gray-100 py-10">
-        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 text-sm text-gray-500 sm:flex-row">
+      <footer className="border-t border-gray-200 py-10">
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 text-sm text-ink-soft sm:flex-row">
           <span>© {new Date().getFullYear()} YouArePilates</span>
           <div className="flex gap-6">
-            <Link href="/login" className="hover:text-gray-900">
+            <Link href="/login" className="hover:text-ink">
               Iniciar sesión
             </Link>
-            <Link href="/onboarding" className="hover:text-gray-900">
+            <Link href="/onboarding" className="hover:text-ink">
               Crear estudio
             </Link>
           </div>

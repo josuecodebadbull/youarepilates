@@ -8,6 +8,8 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 
 import { auth, functions } from "@/lib/firebase/client";
+import { Button } from "@/components/ui/Button";
+import { FormField, inputClass } from "@/components/ui/FormField";
 
 interface OnboardTenantResult {
   tenantId: string;
@@ -62,75 +64,73 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-20">
-      <Link href="/" className="mb-8 flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900">
-        ← Volver al inicio
-      </Link>
-
-      <h1 className="text-2xl font-bold">Crea tu estudio</h1>
-      <p className="mt-2 text-sm text-gray-600">
-        En menos de un minuto tendrás tu panel de administración listo.
-      </p>
-
-      <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-        <div>
-          <label htmlFor="studioName" className="block text-sm font-medium">
-            Nombre del estudio
-          </label>
-          <input
-            id="studioName"
-            required
-            value={studioName}
-            onChange={(e) => setStudioName(e.target.value)}
-            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2"
-            placeholder="Pilates Flow Roma"
-          />
-        </div>
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2"
-          />
-        </div>
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium">
-            Contraseña
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2"
-          />
-        </div>
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
-        >
-          {submitting ? "Creando..." : "Crear mi estudio"}
-        </button>
-      </form>
-
-      <p className="mt-6 text-center text-sm text-gray-500">
-        ¿Ya tienes una cuenta?{" "}
-        <Link href="/login" className="font-semibold text-gray-900 hover:underline">
-          Inicia sesión
+    <main className="flex min-h-screen flex-col justify-center px-6 py-20">
+      <div className="mx-auto w-full max-w-md">
+        <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-ink-soft hover:text-ink">
+          ← Volver al inicio
         </Link>
-      </p>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-soft">
+          <h1 className="text-2xl font-semibold text-ink">Crea tu estudio</h1>
+          <p className="mt-1 text-sm text-ink-soft">
+            En menos de un minuto tendrás tu panel de administración listo.
+          </p>
+
+          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+            <FormField
+              label="Nombre del estudio"
+              htmlFor="studioName"
+              hint="Puedes ajustarlo después"
+              required
+            >
+              <input
+                id="studioName"
+                required
+                value={studioName}
+                onChange={(e) => setStudioName(e.target.value)}
+                className={inputClass}
+                placeholder="Pilates Flow Roma"
+              />
+            </FormField>
+
+            <FormField label="Email" htmlFor="email" required>
+              <input
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputClass}
+              />
+            </FormField>
+
+            <FormField label="Contraseña" htmlFor="password" hint="Mínimo 8 caracteres" required>
+              <input
+                id="password"
+                type="password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={inputClass}
+              />
+            </FormField>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <Button type="submit" disabled={submitting} className="w-full">
+              {submitting ? "Creando..." : "Crear mi estudio"}
+            </Button>
+          </form>
+        </div>
+
+        <p className="mt-6 text-center text-sm text-ink-soft">
+          ¿Ya tienes una cuenta?{" "}
+          <Link href="/login" className="font-semibold text-ink hover:underline">
+            Inicia sesión
+          </Link>
+        </p>
+      </div>
     </main>
   );
 }
