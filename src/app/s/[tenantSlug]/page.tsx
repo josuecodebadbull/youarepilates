@@ -14,7 +14,11 @@ import { httpsCallable } from "firebase/functions";
 import { db, functions } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useTenant } from "@/lib/tenant/TenantProvider";
-import type { ClassTypeDoc, ScheduleDoc } from "@/lib/types/firestore";
+import type { ClassTypeDoc, InstructorDoc, ScheduleDoc } from "@/lib/types/firestore";
+import { ClassCard } from "@/components/student/ClassCard";
+import { DayPicker } from "@/components/student/DayPicker";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface Schedule extends ScheduleDoc {
   id: string;
@@ -25,11 +29,21 @@ interface BookClassSessionResult {
   status: "confirmed" | "waitlisted";
 }
 
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 export default function ClassExplorerPage() {
   const { tenantId } = useTenant();
   const { user, claims } = useAuth();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [classTypes, setClassTypes] = useState<Record<string, ClassTypeDoc>>({});
+  const [instructors, setInstructors] = useState<Record<string, InstructorDoc>>({});
+  const [selectedDay, setSelectedDay] = useState(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
   const [pendingScheduleId, setPendingScheduleId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -57,18 +71,20 @@ export default function ClassExplorerPage() {
     });
   }, [tenantId]);
 
-  const grouped = useMemo(() => {
-    const byDay = new Map<string, Schedule[]>();
-    for (const schedule of schedules) {
-      const key = schedule.startAt.toDate().toLocaleDateString("es-MX", {
-        weekday: "long",
-        day: "numeric",
-        month: "short",
+  useEffect(() => {
+    return onSnapshot(collection(db, "tenants", tenantId, "instructors"), (snapshot) => {
+      const next: Record<string, InstructorDoc> = {};
+      snapshot.docs.forEach((doc) => {
+        next[doc.id] = doc.data() as InstructorDoc;
       });
-      byDay.set(key, [...(byDay.get(key) ?? []), schedule]);
-    }
-    return byDay;
-  }, [schedules]);
+      setInstructors(next);
+    });
+  }, [tenantId]);
+
+  const daySchedules = useMemo(
+    () => schedules.filter((s) => isSameDay(s.startAt.toDate(), selectedDay)),
+    [schedules, selectedDay],
+  );
 
   async function handleBook(scheduleId: string) {
     if (!user) {
@@ -98,48 +114,45 @@ export default function ClassExplorerPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold">Próximas clases</h1>
-      {message && <p className="mt-2 text-sm text-indigo-700">{message}</p>}
+      <h1 className="text-xl font-bold text-gray-900">Reserva tu clase</h1>
 
-      <div className="mt-4 space-y-6 pb-16">
-        {Array.from(grouped.entries()).map(([day, daySchedules]) => (
-          <div key={day}>
-            <h2 className="text-sm font-semibold capitalize text-gray-500">{day}</h2>
-            <ul className="mt-2 space-y-2">
-              {daySchedules.map((schedule) => {
-                const classType = classTypes[schedule.classTypeId];
-                const isFull = schedule.bookedCount >= schedule.capacity;
-                return (
-                  <li
-                    key={schedule.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{classType?.name ?? "Clase"}</p>
-                      <p className="text-sm text-gray-500">
-                        {schedule.startAt.toDate().toLocaleTimeString("es-MX", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}{" "}
-                        · {schedule.bookedCount}/{schedule.capacity} lugares
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleBook(schedule.id)}
-                      disabled={pendingScheduleId === schedule.id || claims?.role !== "student"}
-                      className="shrink-0 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      style={{ backgroundColor: "var(--tenant-primary)" }}
-                    >
-                      {isFull ? "Lista de espera" : "Reservar"}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-        {schedules.length === 0 && (
-          <p className="text-sm text-gray-500">No hay clases próximas por ahora.</p>
+      <div className="sticky top-0 z-10 -mx-4 mt-3 bg-gray-50 px-4 pb-2 pt-1">
+        <DayPicker selected={selectedDay} onSelect={setSelectedDay} />
+      </div>
+
+      {message && (
+        <p className="mt-3 rounded-md bg-indigo-50 px-3 py-2 text-sm text-indigo-700">{message}</p>
+      )}
+
+      <div className="mt-4 space-y-3">
+        {daySchedules.map((schedule) => {
+          const classType = classTypes[schedule.classTypeId];
+          const instructor = instructors[schedule.instructorId];
+          const isFull = schedule.bookedCount >= schedule.capacity;
+          return (
+            <ClassCard
+              key={schedule.id}
+              schedule={schedule}
+              classType={classType}
+              instructor={instructor}
+              action={
+                <Button
+                  onClick={() => handleBook(schedule.id)}
+                  disabled={pendingScheduleId === schedule.id || claims?.role !== "student"}
+                  className="px-3 py-1.5 text-xs"
+                >
+                  {isFull ? "Lista de espera" : "Reservar"}
+                </Button>
+              }
+            />
+          );
+        })}
+        {daySchedules.length === 0 && (
+          <EmptyState
+            icon="🧘"
+            title="No hay clases este día"
+            description="Elige otro día en el selector de arriba."
+          />
         )}
       </div>
     </div>

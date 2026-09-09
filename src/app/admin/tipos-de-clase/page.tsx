@@ -6,6 +6,7 @@ import { addDoc, collection, onSnapshot, orderBy, query } from "firebase/firesto
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import type { ClassLevel, ClassTypeDoc } from "@/lib/types/firestore";
+import { LEVEL_BADGE_CLASSES, LEVEL_LABELS } from "@/lib/classLevel";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FormField, inputClass } from "@/components/ui/FormField";
@@ -14,20 +15,6 @@ import { PageHeader } from "@/components/ui/PageHeader";
 interface ClassType extends ClassTypeDoc {
   id: string;
 }
-
-const LEVEL_LABELS: Record<ClassLevel, string> = {
-  basico: "Básico",
-  intermedio: "Intermedio",
-  avanzado: "Avanzado",
-  embarazo_postparto: "Embarazo / Postparto",
-};
-
-const LEVEL_BADGE_CLASSES: Record<ClassLevel, string> = {
-  basico: "bg-gray-100 text-gray-700",
-  intermedio: "bg-blue-100 text-blue-700",
-  avanzado: "bg-purple-100 text-purple-700",
-  embarazo_postparto: "bg-pink-100 text-pink-700",
-};
 
 export default function TiposDeClasePage() {
   const { tenant, tenantId } = useTenant();
