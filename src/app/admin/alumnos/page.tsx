@@ -10,6 +10,7 @@ import {
   Timestamp,
   where,
 } from "firebase/firestore";
+import { ChevronUp, GraduationCap } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
@@ -66,7 +67,7 @@ export default function AlumnosPage() {
 
       {loaded && students.length === 0 ? (
         <EmptyState
-          icon="🧑‍🎓"
+          icon={<GraduationCap className="h-7 w-7" strokeWidth={1.75} />}
           title="Todavía no tienes alumnos registrados"
           description="Comparte el link de tu app (lo tienes en la barra lateral) para que empiecen a crear su cuenta."
         />
@@ -131,7 +132,7 @@ function StudentRow({
           <p className="truncate text-sm text-gray-500">{student.email}</p>
         </div>
         {expanded ? (
-          <span className="text-sm text-gray-400">▲</span>
+          <ChevronUp className="h-4 w-4 shrink-0 text-gray-400" strokeWidth={1.75} />
         ) : (
           <span className="shrink-0 text-sm font-medium text-gray-600">
             {totalCredits > 0 ? `${totalCredits} créditos` : "Sin créditos"}

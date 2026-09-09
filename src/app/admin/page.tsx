@@ -12,6 +12,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
+import { Calendar, Check } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
@@ -160,7 +161,7 @@ function AdminDashboardContent() {
                   }`}
                   aria-hidden
                 >
-                  {step.done ? "✓" : ""}
+                  {step.done && <Check className="h-3 w-3" strokeWidth={3} />}
                 </span>
                 {step.done ? (
                   <span className="text-amber-800 line-through decoration-amber-400">{step.label}</span>
@@ -187,7 +188,11 @@ function AdminDashboardContent() {
             />
           ))}
           {todaySchedules.length === 0 && (
-            <EmptyState icon="☕" title="No hay clases hoy" description="Disfruta tu día libre." />
+            <EmptyState
+              icon={<Calendar className="h-7 w-7" strokeWidth={1.75} />}
+              title="No hay clases hoy"
+              description="Disfruta tu día libre."
+            />
           )}
         </div>
       </section>
@@ -198,7 +203,7 @@ function AdminDashboardContent() {
 function WelcomeBanner({ slug }: { slug: string }) {
   return (
     <div className="mb-8 rounded-xl border border-brand-200 bg-brand-50 p-6">
-      <h2 className="font-semibold text-brand-900">¡Tu estudio está listo! 🎉</h2>
+      <h2 className="font-semibold text-brand-900">¡Tu estudio está listo!</h2>
       <p className="mt-1 text-sm text-brand-800">
         Siguiente paso: agrega una sede y un paquete de créditos en el menú de la
         izquierda. Cuando estés list@, comparte este link con tus alumnos para que

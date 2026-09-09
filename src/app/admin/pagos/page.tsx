@@ -12,6 +12,7 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
+import { CreditCard } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
@@ -101,7 +102,7 @@ export default function PagosPage() {
 
       {loaded && intents.length === 0 ? (
         <EmptyState
-          icon="💳"
+          icon={<CreditCard className="h-7 w-7" strokeWidth={1.75} />}
           title="No hay pagos pendientes"
           description="Cuando un alumno compre un paquete desde la sección de Precios de su app, lo verás aquí."
         />

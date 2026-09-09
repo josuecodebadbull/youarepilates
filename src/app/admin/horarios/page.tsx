@@ -12,6 +12,7 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
+import { CalendarDays } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
@@ -162,7 +163,7 @@ export default function HorariosPage() {
 
       {loaded && schedules.length === 0 && !formOpen ? (
         <EmptyState
-          icon="🗓️"
+          icon={<CalendarDays className="h-7 w-7" strokeWidth={1.75} />}
           title="Todavía no hay clases programadas"
           description={
             missingPrerequisite

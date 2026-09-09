@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check, ExternalLink } from "lucide-react";
 
 interface StudentAppLinkProps {
   slug: string;
@@ -31,16 +32,16 @@ export function StudentAppLink({ slug, compact = false }: StudentAppLinkProps) {
             title="Copiar link"
             className="shrink-0 rounded px-1.5 py-0.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-900"
           >
-            {copied ? "✓" : "Copiar"}
+            {copied ? <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> : "Copiar"}
           </button>
         </div>
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-1 block text-xs text-indigo-600 hover:underline"
+          className="mt-1 inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"
         >
-          Abrir en pestaña nueva ↗
+          Abrir en pestaña nueva <ExternalLink className="h-3 w-3" strokeWidth={2} />
         </a>
       </div>
     );

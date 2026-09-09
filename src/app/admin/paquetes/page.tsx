@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { addDoc, collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { Ticket } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
@@ -50,7 +51,7 @@ export default function PaquetesPage() {
 
       {loaded && packages.length === 0 && !formOpen ? (
         <EmptyState
-          icon="🎟️"
+          icon={<Ticket className="h-7 w-7" strokeWidth={1.75} />}
           title="Todavía no tienes paquetes"
           description="Crea al menos un paquete (ej. 10 clases por $2,000) para que tus alumnos puedan comprar créditos y reservar."
           action={<Button onClick={() => setFormOpen(true)}>+ Agregar mi primer paquete</Button>}

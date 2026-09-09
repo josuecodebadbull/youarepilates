@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { addDoc, collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { Dumbbell } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
@@ -55,7 +56,7 @@ export default function TiposDeClasePage() {
 
       {loaded && classTypes.length === 0 && !formOpen ? (
         <EmptyState
-          icon="🧘"
+          icon={<Dumbbell className="h-7 w-7" strokeWidth={1.75} />}
           title="Todavía no tienes tipos de clase"
           description="Agrega al menos uno (ej. Reformer Básico) para poder programar horarios más adelante."
           action={

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { doc, updateDoc } from "firebase/firestore";
+import { TriangleAlert } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
@@ -44,10 +45,13 @@ export default function ResponsivaPage() {
         description="El deslinde de responsabilidad que tus alumnos deben firmar antes de reservar su primera clase."
       />
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-        ⚠️ Esto no es asesoría legal. Es una plantilla genérica de punto de partida —
-        pide a un abogado que la revise y adapte a tu país/estado y a tu póliza de
-        seguro antes de confiar en ella para protegerte legalmente.
+      <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+        <span>
+          Esto no es asesoría legal. Es una plantilla genérica de punto de partida —
+          pide a un abogado que la revise y adapte a tu país/estado y a tu póliza de
+          seguro antes de confiar en ella para protegerte legalmente.
+        </span>
       </div>
 
       <div className="mt-6 space-y-4 rounded-xl border border-gray-200 bg-white p-5">

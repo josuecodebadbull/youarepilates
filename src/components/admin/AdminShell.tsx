@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { href: "/admin/alumnos", label: "Alumnos" },
   { href: "/admin/pagos", label: "Pagos" },
   { href: "/admin/responsiva", label: "Responsiva" },
+  { href: "/admin/perfil-estudio", label: "Perfil del estudio" },
 ];
 
 export function AdminShell({ children }: { children: ReactNode }) {

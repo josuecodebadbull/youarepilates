@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { FirebaseError } from "firebase/app";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
+import { ArrowLeft } from "lucide-react";
 
 import { auth, functions } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/Button";
@@ -67,7 +68,7 @@ export default function OnboardingPage() {
     <main className="flex min-h-screen flex-col justify-center px-6 py-20">
       <div className="mx-auto w-full max-w-md">
         <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-ink-soft hover:text-ink">
-          ← Volver al inicio
+          <ArrowLeft className="h-4 w-4" strokeWidth={2} /> Volver al inicio
         </Link>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-soft">

@@ -13,6 +13,7 @@ import {
   where,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
+import { CalendarX } from "lucide-react";
 
 import { db, functions } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -307,7 +308,7 @@ export default function ClassExplorerPage() {
         })}
         {daySchedules.length === 0 && (
           <EmptyState
-            icon="🧘"
+            icon={<CalendarX className="h-7 w-7" strokeWidth={1.75} />}
             title="No hay clases este día"
             description="Elige otro día o quita algún filtro."
           />

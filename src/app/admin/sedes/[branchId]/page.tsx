@@ -14,8 +14,10 @@ import {
   query,
   updateDoc,
 } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { ArrowLeft, BedDouble, ImagePlus } from "lucide-react";
 
-import { db } from "@/lib/firebase/client";
+import { db, storage } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import type { BranchDoc, RoomDoc } from "@/lib/types/firestore";
 import { Button } from "@/components/ui/Button";
@@ -55,8 +57,11 @@ export default function SedeDetailPage() {
 
   return (
     <div>
-      <Link href="/admin/sedes" className="text-sm text-gray-500 hover:text-gray-900">
-        ← Sedes
+      <Link
+        href="/admin/sedes"
+        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
+      >
+        <ArrowLeft className="h-4 w-4" strokeWidth={2} /> Sedes
       </Link>
 
       <PageHeader
@@ -69,13 +74,15 @@ export default function SedeDetailPage() {
         action={!formOpen && <Button onClick={() => setFormOpen(true)}>+ Agregar sala</Button>}
       />
 
+      {branch && <BranchInfoForm tenantId={tenantId} branchId={branchId} branch={branch} />}
+
       {formOpen && (
         <RoomForm tenantId={tenantId} branchId={branchId} onDone={() => setFormOpen(false)} />
       )}
 
       {loaded && rooms.length === 0 && !formOpen ? (
         <EmptyState
-          icon="🛏️"
+          icon={<BedDouble className="h-7 w-7" strokeWidth={1.75} />}
           title="Todavía no tienes salas en esta sede"
           description='Agrega una sala (ej. "Sala Reformer 1") y cuántas camas o lugares tiene, para poder programar horarios ahí.'
           action={<Button onClick={() => setFormOpen(true)}>+ Agregar mi primera sala</Button>}
@@ -87,6 +94,122 @@ export default function SedeDetailPage() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function BranchInfoForm({
+  tenantId,
+  branchId,
+  branch,
+}: {
+  tenantId: string;
+  branchId: string;
+  branch: BranchDoc;
+}) {
+  const [phone, setPhone] = useState(branch.phone ?? "");
+  const [arrivalNote, setArrivalNote] = useState(branch.arrivalNote ?? "");
+  const [photoUrl, setPhotoUrl] = useState(branch.photoUrl ?? null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  function handlePhotoChange(file: File | null) {
+    setPhotoFile(file);
+    setPhotoPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      let nextPhotoUrl = photoUrl;
+      if (photoFile) {
+        const photoRef = ref(storage, `tenants/${tenantId}/branches/${branchId}/photo`);
+        await uploadBytes(photoRef, photoFile, { contentType: photoFile.type });
+        nextPhotoUrl = await getDownloadURL(photoRef);
+        setPhotoUrl(nextPhotoUrl);
+        if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+        setPhotoFile(null);
+        setPhotoPreviewUrl(null);
+      }
+
+      await updateDoc(doc(db, "tenants", tenantId, "branches", branchId), {
+        phone,
+        arrivalNote,
+        photoUrl: nextPhotoUrl,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const displayedPhotoUrl = photoPreviewUrl ?? photoUrl;
+
+  return (
+    <div className="mb-6 space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5">
+      <h2 className="font-semibold text-gray-900">Información para tus alumnos</h2>
+      <p className="text-sm text-gray-500">
+        Se muestra en la sección &ldquo;Estudio&rdquo; de la app, junto con la dirección
+        y el mapa de esta sede, para que sepan cómo llegar a su clase.
+      </p>
+
+      <FormField label="Foto de la sede" htmlFor="branch-photo" hint="Opcional">
+        <div className="flex items-center gap-4">
+          <div className="flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-white">
+            {displayedPhotoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={displayedPhotoUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <ImagePlus className="h-6 w-6 text-gray-300" strokeWidth={1.5} />
+            )}
+          </div>
+          <input
+            id="branch-photo"
+            type="file"
+            accept="image/*"
+            onChange={(e) => handlePhotoChange(e.target.files?.[0] ?? null)}
+            className="text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-700 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-800"
+          />
+        </div>
+      </FormField>
+
+      <FormField label="Teléfono de la sede" htmlFor="branch-phone" hint="Opcional — con lada">
+        <input
+          id="branch-phone"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="55 1234 5678"
+          className={inputClass}
+        />
+      </FormField>
+
+      <FormField
+        label="Cómo llegar / qué llevar"
+        htmlFor="branch-arrival"
+        hint='Estacionamiento, referencias, qué traer a clase — ej. "Estacionamiento gratuito en el sótano, entra por la puerta lateral"'
+      >
+        <textarea
+          id="branch-arrival"
+          rows={3}
+          value={arrivalNote}
+          onChange={(e) => setArrivalNote(e.target.value)}
+          className={inputClass}
+        />
+      </FormField>
+
+      <div className="flex items-center gap-3">
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? "Guardando..." : "Guardar información"}
+        </Button>
+        {saved && <span className="text-sm text-green-600">¡Guardado!</span>}
+      </div>
     </div>
   );
 }

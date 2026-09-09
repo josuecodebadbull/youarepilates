@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { addDoc, collection, onSnapshot, orderBy, query, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { Users } from "lucide-react";
 
 import { db, storage } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
@@ -52,7 +53,7 @@ export default function InstructoresPage() {
 
       {loaded && instructors.length === 0 && !formOpen ? (
         <EmptyState
-          icon="🧑‍🏫"
+          icon={<Users className="h-7 w-7" strokeWidth={1.75} />}
           title="Todavía no tienes instructores"
           description="Agrega a tu primer coach para poder asignarlo a los horarios."
           action={<Button onClick={() => setFormOpen(true)}>+ Agregar mi primer instructor</Button>}

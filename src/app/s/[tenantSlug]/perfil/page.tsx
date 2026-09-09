@@ -11,6 +11,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import { CheckCircle2 } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -144,7 +145,9 @@ function WaiverSection({
   if (signature) {
     return (
       <section className="rounded-xl border border-brand-200 bg-brand-50 p-5">
-        <p className="font-semibold text-brand-900">✓ Carta responsiva firmada</p>
+        <p className="flex items-center gap-1.5 font-semibold text-brand-900">
+          <CheckCircle2 className="h-4 w-4" strokeWidth={2} /> Carta responsiva firmada
+        </p>
         <p className="mt-1 text-sm text-brand-800">
           Firmada por {signature.fullNameTyped} el{" "}
           {signature.signedAt.toDate().toLocaleDateString("es-MX")} (versión {signature.version}).

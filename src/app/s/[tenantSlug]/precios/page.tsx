@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addDoc, collection, onSnapshot, orderBy, query, Timestamp, where } from "firebase/firestore";
+import { Ticket } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -104,7 +105,7 @@ export default function PreciosPage() {
 
         {packages.length === 0 && (
           <EmptyState
-            icon="🎟️"
+            icon={<Ticket className="h-7 w-7" strokeWidth={1.75} />}
             title="Todavía no hay paquetes disponibles"
             description="Vuelve pronto — el estudio está configurando sus paquetes de créditos."
           />

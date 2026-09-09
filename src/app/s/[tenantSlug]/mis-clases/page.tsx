@@ -11,6 +11,7 @@ import {
   where,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
+import { Archive, CalendarDays } from "lucide-react";
 
 import { db, functions } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -197,7 +198,13 @@ export default function MisClasesPage() {
 
         {visible.length === 0 && (
           <EmptyState
-            icon={tab === "proximas" ? "📅" : "🗂️"}
+            icon={
+              tab === "proximas" ? (
+                <CalendarDays className="h-7 w-7" strokeWidth={1.75} />
+              ) : (
+                <Archive className="h-7 w-7" strokeWidth={1.75} />
+              )
+            }
             title={tab === "proximas" ? "No tienes clases próximas" : "Sin historial todavía"}
             description={
               tab === "proximas"

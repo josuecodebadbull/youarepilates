@@ -44,12 +44,34 @@ export interface TenantDoc {
     text: string;
     version: number;
   };
+  /**
+   * Studio-wide info shown on the student PWA's "Estudio" page: description, hero
+   * image, contact/social links, amenities and policies. Optional because tenants
+   * created before this feature existed don't have it yet — always read through
+   * `DEFAULT_TENANT_PROFILE` (src/lib/tenantProfile.ts) rather than assuming it exists.
+   */
+  profile?: TenantProfile;
+}
+
+export interface TenantProfile {
+  description: string;
+  heroImageUrl: string | null;
+  instagramUrl: string;
+  whatsapp: string;
+  email: string;
+  policies: string;
+  amenities: string[];
 }
 
 export interface BranchDoc {
   name: string;
   address: string;
   createdAt: Timestamp;
+  /** All optional: branches created before this feature existed don't have them yet. */
+  phone?: string;
+  photoUrl?: string | null;
+  /** Free text: parking, qué llevar, instrucciones para llegar — shown on la página de Estudio. */
+  arrivalNote?: string;
 }
 
 export interface RoomSpot {

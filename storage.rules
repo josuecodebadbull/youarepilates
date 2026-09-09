@@ -33,6 +33,24 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // Studio profile media (hero image for the student PWA's "Estudio" page):
+    // public read, staff-only write.
+    match /tenants/{tenantId}/profile/{fileName} {
+      allow read: if true;
+      allow write: if isTenantStaff(tenantId)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Branch photos (shown on the student PWA's "Estudio" page): public read,
+    // staff-only write.
+    match /tenants/{tenantId}/branches/{branchId}/{fileName} {
+      allow read: if true;
+      allow write: if isTenantStaff(tenantId)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
     // Student avatars: public-ish read within the app (instructor roster shows them),
     // writable only by the student themselves.
     match /tenants/{tenantId}/avatars/{userId} {

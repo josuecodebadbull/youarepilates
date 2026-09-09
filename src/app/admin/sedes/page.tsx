@@ -10,6 +10,7 @@ import {
   query,
   serverTimestamp,
 } from "firebase/firestore";
+import { Building2, ChevronRight } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
@@ -60,7 +61,7 @@ export default function SedesPage() {
 
       {loaded && branches.length === 0 && !formOpen ? (
         <EmptyState
-          icon="🏢"
+          icon={<Building2 className="h-7 w-7" strokeWidth={1.75} />}
           title="Todavía no tienes sedes"
           description="Agrega tu primera sede para poder crear salas y programar horarios de clases."
           action={<Button onClick={() => setFormOpen(true)}>+ Agregar mi primera sede</Button>}
@@ -77,9 +78,7 @@ export default function SedesPage() {
                 <p className="font-medium text-gray-900">{branch.name}</p>
                 <p className="mt-1 text-sm text-gray-500">{branch.address}</p>
               </div>
-              <span aria-hidden className="text-gray-400">
-                →
-              </span>
+              <ChevronRight aria-hidden className="h-5 w-5 shrink-0 text-gray-400" strokeWidth={1.75} />
             </Link>
           ))}
         </div>
