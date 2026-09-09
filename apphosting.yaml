@@ -11,22 +11,22 @@ runConfig:
 
 env:
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: REPLACE_ME
+    value: AIzaSyDBx1QKpAOQ6e4VMbP13YQufQz0quMCiAc
     availability: [BUILD, RUNTIME]
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: REPLACE_ME
+    value: youarepilates-e202c.firebaseapp.com
     availability: [BUILD, RUNTIME]
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: REPLACE_ME
+    value: youarepilates-e202c
     availability: [BUILD, RUNTIME]
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: REPLACE_ME
+    value: youarepilates-e202c.firebasestorage.app
     availability: [BUILD, RUNTIME]
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: REPLACE_ME
+    value: "276271444886"
     availability: [BUILD, RUNTIME]
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: REPLACE_ME
+    value: "1:276271444886:web:8179a2bb27b0558b5a23b7"
     availability: [BUILD, RUNTIME]
   # Server-only Admin SDK credentials: store the real values as secrets
   # (`firebase apphosting:secrets:set FIREBASE_PRIVATE_KEY`) and reference them here
