@@ -27,7 +27,14 @@ export const registerStudent = onCall<RegisterStudentInput>(async (request) => {
   const claims: AuthClaims = { tenantId, role: "student", branchIds: [] };
   await adminAuth.setCustomUserClaims(request.auth.uid, claims);
   await adminDb.collection("users").doc(request.auth.uid).set(
-    { tenantId, role: "student", displayName: displayName ?? "" },
+    {
+      tenantId,
+      role: "student",
+      // Only touch displayName when a real one was provided — this function also runs
+      // as a "heal my orphaned account" retry from the login page (no displayName in
+      // hand at that point), and must never blank out a name the student already set.
+      ...(displayName ? { displayName } : {}),
+    },
     { merge: true },
   );
 

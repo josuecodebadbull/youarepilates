@@ -29,7 +29,16 @@ export default function StudentLoginPage() {
 
     try {
       if (mode === "login") {
-        await signInWithEmailAndPassword(auth, email, password);
+        const credential = await signInWithEmailAndPassword(auth, email, password);
+        // Heals an account whose signup never finished (e.g. a dropped network call
+        // to registerStudent left it with tenantId: null) — safe to retry any number
+        // of times, and only touches accounts that never joined a tenant at all.
+        const tokenResult = await credential.user.getIdTokenResult();
+        if (tokenResult.claims.tenantId == null) {
+          const registerStudent = httpsCallable(functions, "registerStudent");
+          await registerStudent({ tenantId });
+          await credential.user.getIdToken(true);
+        }
       } else {
         const credential = await createUserWithEmailAndPassword(auth, email, password);
         const registerStudent = httpsCallable(functions, "registerStudent");
