@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FormField, inputClass } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { getMonday, WeekCalendar } from "@/components/admin/WeekCalendar";
 
 interface Schedule extends ScheduleDoc {
   id: string;
@@ -45,6 +46,9 @@ export default function HorariosPage() {
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [view, setView] = useState<"calendar" | "list">("calendar");
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
+  const [weekSchedules, setWeekSchedules] = useState<Schedule[]>([]);
 
   useEffect(() => {
     const schedulesQuery = query(
@@ -57,6 +61,21 @@ export default function HorariosPage() {
       setLoaded(true);
     });
   }, [tenantId]);
+
+  useEffect(() => {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const weekQuery = query(
+      collection(db, "tenants", tenantId, "schedules"),
+      where("status", "==", "scheduled"),
+      where("startAt", ">=", Timestamp.fromDate(weekStart)),
+      where("startAt", "<", Timestamp.fromDate(weekEnd)),
+      orderBy("startAt", "asc"),
+    );
+    return onSnapshot(weekQuery, (snapshot) => {
+      setWeekSchedules(snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as ScheduleDoc) })));
+    });
+  }, [tenantId, weekStart]);
 
   useEffect(() => {
     return onSnapshot(
@@ -80,6 +99,15 @@ export default function HorariosPage() {
   }, [tenantId]);
 
   const missingPrerequisite = branches.length === 0 || classTypes.length === 0 || instructors.length === 0;
+
+  const classTypesById = useMemo(
+    () => Object.fromEntries(classTypes.map((c) => [c.id, c])),
+    [classTypes],
+  );
+  const instructorsById = useMemo(
+    () => Object.fromEntries(instructors.map((i) => [i.id, i])),
+    [instructors],
+  );
 
   return (
     <div>
@@ -141,53 +169,92 @@ export default function HorariosPage() {
         />
       ) : (
         <>
-          <div className="mb-4 flex gap-4 text-xs text-gray-500">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-green-500" /> Con lugares
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-red-500" /> Llena
-            </span>
+          <div className="mb-4 flex justify-end">
+            <div className="inline-flex rounded-md border border-gray-200 p-0.5 text-sm">
+              <button
+                onClick={() => setView("calendar")}
+                className={`rounded px-3 py-1 ${view === "calendar" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+              >
+                Calendario
+              </button>
+              <button
+                onClick={() => setView("list")}
+                className={`rounded px-3 py-1 ${view === "list" ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+              >
+                Lista
+              </button>
+            </div>
           </div>
-          <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200">
-            {schedules.map((schedule) => {
-              const classType = classTypes.find((c) => c.id === schedule.classTypeId);
-              const instructor = instructors.find((i) => i.id === schedule.instructorId);
-              return (
-                <li key={schedule.id} className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {classType?.name ?? "Clase"}
-                      {instructor && <span className="font-normal text-gray-500"> · {instructor.name}</span>}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {schedule.startAt.toDate().toLocaleString("es-MX", {
-                        weekday: "short",
-                        day: "numeric",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  </div>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      schedule.bookedCount >= schedule.capacity
-                        ? "bg-red-100 text-red-700"
-                        : "bg-green-100 text-green-700"
-                    }`}
-                  >
-                    {schedule.bookedCount}/{schedule.capacity}
-                    {schedule.waitlistCount > 0 ? ` · ${schedule.waitlistCount} en espera` : ""}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+
+          {view === "calendar" ? (
+            <WeekCalendar
+              weekStart={weekStart}
+              schedules={weekSchedules}
+              classTypes={classTypesById}
+              instructors={instructorsById}
+              onPrevWeek={() => setWeekStart((d) => shiftDays(d, -7))}
+              onNextWeek={() => setWeekStart((d) => shiftDays(d, 7))}
+              onToday={() => setWeekStart(getMonday(new Date()))}
+            />
+          ) : (
+            <>
+              <div className="mb-4 flex gap-4 text-xs text-gray-500">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-green-500" /> Con lugares
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-red-500" /> Llena
+                </span>
+              </div>
+              <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200">
+                {schedules.map((schedule) => {
+                  const classType = classTypesById[schedule.classTypeId];
+                  const instructor = instructorsById[schedule.instructorId];
+                  return (
+                    <li key={schedule.id} className="flex items-center justify-between p-4">
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {classType?.name ?? "Clase"}
+                          {instructor && (
+                            <span className="font-normal text-gray-500"> · {instructor.name}</span>
+                          )}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {schedule.startAt.toDate().toLocaleString("es-MX", {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${
+                          schedule.bookedCount >= schedule.capacity
+                            ? "bg-red-100 text-red-700"
+                            : "bg-green-100 text-green-700"
+                        }`}
+                      >
+                        {schedule.bookedCount}/{schedule.capacity}
+                        {schedule.waitlistCount > 0 ? ` · ${schedule.waitlistCount} en espera` : ""}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
         </>
       )}
     </div>
   );
+}
+
+function shiftDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
 function ScheduleForm({
