@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { FirebaseError } from "firebase/app";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 
@@ -10,6 +12,19 @@ import { auth, functions } from "@/lib/firebase/client";
 interface OnboardTenantResult {
   tenantId: string;
   slug: string;
+}
+
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  "auth/email-already-in-use": "Ya existe una cuenta con ese correo. Intenta iniciar sesión.",
+  "auth/weak-password": "La contraseña debe tener al menos 8 caracteres.",
+  "auth/invalid-email": "Ese correo no parece válido.",
+};
+
+function friendlyErrorMessage(err: unknown): string {
+  if (err instanceof FirebaseError) {
+    return AUTH_ERROR_MESSAGES[err.code] ?? "No se pudo crear el estudio. Intenta de nuevo.";
+  }
+  return "No se pudo crear el estudio. Intenta de nuevo.";
 }
 
 export default function OnboardingPage() {
@@ -40,14 +55,18 @@ export default function OnboardingPage() {
 
       router.push(`/admin?welcome=${result.data.slug}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo crear el estudio.");
+      setError(friendlyErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <main className="mx-auto max-w-md px-6 py-20">
+    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-20">
+      <Link href="/" className="mb-8 flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900">
+        ← Volver al inicio
+      </Link>
+
       <h1 className="text-2xl font-bold">Crea tu estudio</h1>
       <p className="mt-2 text-sm text-gray-600">
         En menos de un minuto tendrás tu panel de administración listo.
@@ -105,6 +124,13 @@ export default function OnboardingPage() {
           {submitting ? "Creando..." : "Crear mi estudio"}
         </button>
       </form>
+
+      <p className="mt-6 text-center text-sm text-gray-500">
+        ¿Ya tienes una cuenta?{" "}
+        <Link href="/login" className="font-semibold text-gray-900 hover:underline">
+          Inicia sesión
+        </Link>
+      </p>
     </main>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -39,8 +40,13 @@ function LoginForm() {
   }
 
   return (
-    <main className="mx-auto max-w-md px-6 py-20">
-      <h1 className="text-2xl font-bold">Iniciar sesión</h1>
+    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-20">
+      <Link href="/" className="mb-8 flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900">
+        ← Volver al inicio
+      </Link>
+
+      <h1 className="text-2xl font-bold">Bienvenido de vuelta</h1>
+      <p className="mt-1 text-sm text-gray-500">Ingresa a tu panel de administración.</p>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">
         <div>
@@ -80,6 +86,13 @@ function LoginForm() {
           {submitting ? "Ingresando..." : "Ingresar"}
         </button>
       </form>
+
+      <p className="mt-6 text-center text-sm text-gray-500">
+        ¿No tienes un estudio todavía?{" "}
+        <Link href="/onboarding" className="font-semibold text-gray-900 hover:underline">
+          Créalo gratis
+        </Link>
+      </p>
     </main>
   );
 }
