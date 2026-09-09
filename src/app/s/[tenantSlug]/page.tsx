@@ -112,10 +112,10 @@ export default function ClassExplorerPage() {
                 return (
                   <li
                     key={schedule.id}
-                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4"
                   >
-                    <div>
-                      <p className="font-medium">{classType?.name ?? "Clase"}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{classType?.name ?? "Clase"}</p>
                       <p className="text-sm text-gray-500">
                         {schedule.startAt.toDate().toLocaleTimeString("es-MX", {
                           hour: "2-digit",
@@ -127,7 +127,7 @@ export default function ClassExplorerPage() {
                     <button
                       onClick={() => handleBook(schedule.id)}
                       disabled={pendingScheduleId === schedule.id || claims?.role !== "student"}
-                      className="rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      className="shrink-0 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                       style={{ backgroundColor: "var(--tenant-primary)" }}
                     >
                       {isFull ? "Lista de espera" : "Reservar"}

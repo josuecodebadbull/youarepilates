@@ -27,6 +27,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [tenant, setTenant] = useState<TenantDoc | null>(null);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -47,6 +48,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, [loading, user, claims, router, pathname]);
 
+  // Close the mobile drawer automatically on every navigation.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
+
   if (loading || !user || !claims) {
     return <div className="p-10 text-sm text-gray-500">Cargando…</div>;
   }
@@ -57,9 +63,48 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   return (
     <TenantProvider tenantId={claims.tenantId} tenant={tenant}>
-      <div className="flex min-h-screen">
-        <aside className="w-56 shrink-0 border-r border-gray-200 bg-gray-50 p-4">
-          <p className="mb-6 truncate font-semibold">{tenant.name}</p>
+      <div className="min-h-screen md:flex">
+        {/* Mobile top bar — hidden on desktop, where the sidebar is always visible instead. */}
+        <header className="flex items-center justify-between border-b border-gray-200 bg-white p-4 md:hidden">
+          <p className="truncate font-semibold">{tenant.name}</p>
+          <button
+            onClick={() => setNavOpen(true)}
+            aria-label="Abrir menú"
+            className="rounded-md p-2 text-gray-600 hover:bg-gray-100"
+          >
+            <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
+            </svg>
+          </button>
+        </header>
+
+        {/* Backdrop for the mobile drawer. */}
+        {navOpen && (
+          <div
+            onClick={() => setNavOpen(false)}
+            className="fixed inset-0 z-30 bg-black/30 md:hidden"
+            aria-hidden
+          />
+        )}
+
+        <aside
+          className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-gray-200 bg-gray-50 p-4 transition-transform duration-200 ease-out md:relative md:z-auto md:w-56 md:shrink-0 md:translate-x-0 ${
+            navOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="mb-6 flex items-center justify-between">
+            <p className="truncate font-semibold">{tenant.name}</p>
+            <button
+              onClick={() => setNavOpen(false)}
+              aria-label="Cerrar menú"
+              className="rounded-md p-1 text-gray-500 hover:bg-gray-100 md:hidden"
+            >
+              <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={2}>
+                <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+
           <nav className="space-y-1">
             {NAV_ITEMS.map((item) => (
               <Link
@@ -84,7 +129,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
             Cerrar sesión
           </button>
         </aside>
-        <main className="flex-1 p-8">{children}</main>
+
+        <main className="flex-1 p-4 md:p-8">{children}</main>
       </div>
     </TenantProvider>
   );

@@ -50,6 +50,14 @@ export default function HorariosPage() {
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [weekSchedules, setWeekSchedules] = useState<Schedule[]>([]);
 
+  // The week grid needs real width to be usable — default to the list on phones
+  // instead of handing them a calendar that only works by scrolling sideways.
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setView("list");
+    }
+  }, []);
+
   useEffect(() => {
     const schedulesQuery = query(
       collection(db, "tenants", tenantId, "schedules"),
