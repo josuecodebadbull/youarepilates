@@ -15,16 +15,20 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { ArrowLeft, BedDouble, ImagePlus } from "lucide-react";
+import { ArrowLeft, BedDouble, ImagePlus, Pencil } from "lucide-react";
 
 import { db, storage } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
+import { buildSpotsFromRowSizes, groupSpotsByRow, rowSizesFromSpots } from "@/lib/roomLayout";
 import type { BranchDoc, RoomDoc } from "@/lib/types/firestore";
+import { RoomLayoutEditor } from "@/components/admin/RoomLayoutEditor";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FileInput } from "@/components/ui/FileInput";
 import { FormField, inputClass } from "@/components/ui/FormField";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PilatesBedIcon } from "@/components/ui/PilatesBedIcon";
 
 interface Room extends RoomDoc {
   id: string;
@@ -38,6 +42,7 @@ export default function SedeDetailPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
 
   useEffect(() => {
     return onSnapshot(doc(db, "tenants", tenantId, "branches", branchId), (snap) => {
@@ -72,16 +77,29 @@ export default function SedeDetailPage() {
             ? `${branch.address} — administra las salas y camas de reformer de esta sede.`
             : undefined
         }
-        action={!formOpen && <Button onClick={() => setFormOpen(true)}>+ Agregar sala</Button>}
+        action={<Button onClick={() => setFormOpen(true)}>+ Agregar sala</Button>}
       />
 
       {branch && <BranchInfoForm tenantId={tenantId} branchId={branchId} branch={branch} />}
 
       {formOpen && (
-        <RoomForm tenantId={tenantId} branchId={branchId} onDone={() => setFormOpen(false)} />
+        <Modal title="Nueva sala" onClose={() => setFormOpen(false)}>
+          <RoomForm tenantId={tenantId} branchId={branchId} onDone={() => setFormOpen(false)} />
+        </Modal>
       )}
 
-      {loaded && rooms.length === 0 && !formOpen ? (
+      {editingRoom && (
+        <Modal title="Editar sala" onClose={() => setEditingRoom(null)}>
+          <RoomEditForm
+            tenantId={tenantId}
+            branchId={branchId}
+            room={editingRoom}
+            onDone={() => setEditingRoom(null)}
+          />
+        </Modal>
+      )}
+
+      {loaded && rooms.length === 0 ? (
         <EmptyState
           icon={<BedDouble className="h-7 w-7" strokeWidth={1.75} />}
           title="Todavía no tienes salas en esta sede"
@@ -91,7 +109,13 @@ export default function SedeDetailPage() {
       ) : (
         <div className="space-y-4">
           {rooms.map((room) => (
-            <RoomCard key={room.id} tenantId={tenantId} branchId={branchId} room={room} />
+            <RoomCard
+              key={room.id}
+              tenantId={tenantId}
+              branchId={branchId}
+              room={room}
+              onEdit={() => setEditingRoom(room)}
+            />
           ))}
         </div>
       )}
@@ -218,21 +242,15 @@ function RoomForm({
   branchId: string;
   onDone: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [capacity, setCapacity] = useState(10);
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
+  async function handleSubmit(name: string, rowSizes: number[]) {
     setSubmitting(true);
     try {
-      const spots = Array.from({ length: capacity }, (_, i) => ({
-        spotNumber: i + 1,
-        label: `Cama ${i + 1}`,
-      }));
+      const spots = buildSpotsFromRowSizes(rowSizes);
       await addDoc(collection(db, "tenants", tenantId, "branches", branchId, "rooms"), {
         name,
-        capacity,
+        capacity: spots.length,
         spots,
         blockedSpots: [],
       } satisfies RoomDoc);
@@ -243,55 +261,58 @@ function RoomForm({
   }
 
   return (
-    <form
+    <RoomLayoutEditor
+      initialName=""
+      initialRowSizes={[4]}
+      submitLabel="Guardar sala"
+      submitting={submitting}
       onSubmit={handleSubmit}
-      className="mb-6 max-w-2xl space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5"
-    >
-      <h2 className="font-semibold text-gray-900">Nueva sala</h2>
+      onCancel={onDone}
+    />
+  );
+}
 
-      <FormField
-        label="Nombre de la sala"
-        htmlFor="room-name"
-        hint='Como la verán tus alumnos, ej. "Sala Reformer 1"'
-        required
-      >
-        <input
-          id="room-name"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Sala Reformer 1"
-          className={inputClass}
-        />
-      </FormField>
+function RoomEditForm({
+  tenantId,
+  branchId,
+  room,
+  onDone,
+}: {
+  tenantId: string;
+  branchId: string;
+  room: Room;
+  onDone: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
 
-      <FormField
-        label="Capacidad"
-        htmlFor="room-capacity"
-        hint="Cuántas camas o lugares caben al mismo tiempo — se numeran automáticamente"
-        required
-      >
-        <input
-          id="room-capacity"
-          type="number"
-          min={1}
-          max={40}
-          required
-          value={capacity}
-          onChange={(e) => setCapacity(Number(e.target.value))}
-          className={inputClass}
-        />
-      </FormField>
+  async function handleSubmit(name: string, rowSizes: number[]) {
+    setSubmitting(true);
+    try {
+      const spots = buildSpotsFromRowSizes(rowSizes);
+      const validSpotNumbers = new Set(spots.map((s) => s.spotNumber));
+      const blockedSpots = room.blockedSpots.filter((n) => validSpotNumbers.has(n));
 
-      <div className="flex gap-2">
-        <Button type="submit" disabled={submitting}>
-          {submitting ? "Guardando..." : "Guardar sala"}
-        </Button>
-        <Button type="button" variant="ghost" onClick={onDone}>
-          Cancelar
-        </Button>
-      </div>
-    </form>
+      await updateDoc(doc(db, "tenants", tenantId, "branches", branchId, "rooms", room.id), {
+        name,
+        capacity: spots.length,
+        spots,
+        blockedSpots,
+      });
+      onDone();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <RoomLayoutEditor
+      initialName={room.name}
+      initialRowSizes={rowSizesFromSpots(room.spots)}
+      submitLabel="Guardar cambios"
+      submitting={submitting}
+      onSubmit={handleSubmit}
+      onCancel={onDone}
+    />
   );
 }
 
@@ -299,12 +320,15 @@ function RoomCard({
   tenantId,
   branchId,
   room,
+  onEdit,
 }: {
   tenantId: string;
   branchId: string;
   room: Room;
+  onEdit: () => void;
 }) {
   const availableCount = room.capacity - room.blockedSpots.length;
+  const rows = groupSpotsByRow(room.spots);
 
   async function toggleSpot(spotNumber: number) {
     const roomRef = doc(db, "tenants", tenantId, "branches", branchId, "rooms", room.id);
@@ -316,34 +340,49 @@ function RoomCard({
 
   return (
     <div className="rounded-lg border border-gray-200 p-5">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3">
         <p className="font-medium text-gray-900">{room.name}</p>
-        <p className="text-sm text-gray-500">
-          {availableCount}/{room.capacity} disponibles
-        </p>
+        <div className="flex shrink-0 items-center gap-3">
+          <p className="text-sm text-gray-500">
+            {availableCount}/{room.capacity} disponibles
+          </p>
+          <button
+            onClick={onEdit}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-soft hover:bg-gray-100 hover:text-ink"
+          >
+            <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} /> Editar
+          </button>
+        </div>
       </div>
       <p className="mt-1 text-xs text-gray-500">
         Haz clic en una cama para bloquearla por mantenimiento sin afectar el resto del cupo.
       </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {room.spots.map((spot) => {
-          const blocked = room.blockedSpots.includes(spot.spotNumber);
-          return (
-            <button
-              key={spot.spotNumber}
-              type="button"
-              onClick={() => toggleSpot(spot.spotNumber)}
-              title={blocked ? `${spot.label} — bloqueada por mantenimiento` : spot.label}
-              className={`flex h-9 w-9 items-center justify-center rounded-md text-xs font-semibold transition-colors ${
-                blocked
-                  ? "bg-amber-100 text-amber-700 line-through decoration-2"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              {spot.spotNumber}
-            </button>
-          );
-        })}
+      <div className="mt-3 space-y-2">
+        {rows.map((rowSpots, rowIndex) => (
+          <div key={rowIndex} className="flex flex-wrap gap-1.5">
+            {rowSpots.map((spot) => {
+              const blocked = room.blockedSpots.includes(spot.spotNumber);
+              return (
+                <button
+                  key={spot.spotNumber}
+                  type="button"
+                  onClick={() => toggleSpot(spot.spotNumber)}
+                  title={blocked ? `${spot.label} — bloqueada por mantenimiento` : spot.label}
+                  className={`relative flex h-11 w-7 items-center justify-center transition-colors ${
+                    blocked ? "text-amber-500" : "text-gray-400 hover:text-gray-600"
+                  }`}
+                >
+                  <PilatesBedIcon className="h-full w-full" />
+                  <span
+                    className={`absolute text-[10px] font-semibold ${blocked ? "text-amber-700 line-through" : "text-gray-700"}`}
+                  >
+                    {spot.spotNumber}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -11,8 +11,13 @@ import type {
   ScheduleDoc,
 } from "../lib/types";
 
-function makeSpots(count: number) {
-  return Array.from({ length: count }, (_, i) => ({ spotNumber: i + 1, label: `Lugar ${i + 1}` }));
+/** Rows of `perRow` beds each, so the demo layout looks like a real room floor plan. */
+function makeSpots(count: number, perRow = 4) {
+  return Array.from({ length: count }, (_, i) => ({
+    spotNumber: i + 1,
+    label: `Lugar ${i + 1}`,
+    row: Math.floor(i / perRow),
+  }));
 }
 
 /**

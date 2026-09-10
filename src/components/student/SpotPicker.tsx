@@ -1,4 +1,6 @@
+import { groupSpotsByRow } from "@/lib/roomLayout";
 import type { RoomSpot } from "@/lib/types/firestore";
+import { PilatesBedIcon } from "@/components/ui/PilatesBedIcon";
 
 interface SpotPickerProps {
   spots: RoomSpot[];
@@ -9,32 +11,42 @@ interface SpotPickerProps {
 }
 
 export function SpotPicker({ spots, blockedSpots, takenSpots, selected, onSelect }: SpotPickerProps) {
+  const rows = groupSpotsByRow(spots);
+
   return (
     <div>
-      <div className="flex flex-wrap gap-2">
-        {spots.map((spot) => {
-          const unavailable = blockedSpots.includes(spot.spotNumber) || takenSpots.includes(spot.spotNumber);
-          const isSelected = selected === spot.spotNumber;
-          return (
-            <button
-              key={spot.spotNumber}
-              type="button"
-              disabled={unavailable}
-              onClick={() => onSelect(isSelected ? null : spot.spotNumber)}
-              title={spot.label}
-              className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${
-                unavailable
-                  ? "cursor-not-allowed bg-gray-100 text-gray-300 line-through"
-                  : isSelected
-                    ? "text-white"
-                    : "bg-gray-100 text-ink hover:bg-gray-200"
-              }`}
-              style={isSelected && !unavailable ? { backgroundColor: "var(--tenant-primary)" } : undefined}
-            >
-              {spot.spotNumber}
-            </button>
-          );
-        })}
+      <div className="space-y-2">
+        {rows.map((rowSpots, rowIndex) => (
+          <div key={rowIndex} className="flex flex-wrap gap-2">
+            {rowSpots.map((spot) => {
+              const unavailable = blockedSpots.includes(spot.spotNumber) || takenSpots.includes(spot.spotNumber);
+              const isSelected = selected === spot.spotNumber;
+              return (
+                <button
+                  key={spot.spotNumber}
+                  type="button"
+                  disabled={unavailable}
+                  onClick={() => onSelect(isSelected ? null : spot.spotNumber)}
+                  title={spot.label}
+                  className={`relative flex h-12 w-8 items-center justify-center transition-colors ${
+                    unavailable ? "cursor-not-allowed text-gray-200" : "text-gray-400 hover:text-gray-600"
+                  }`}
+                  style={isSelected && !unavailable ? { color: "var(--tenant-primary)" } : undefined}
+                >
+                  <PilatesBedIcon className="h-full w-full" filled={isSelected && !unavailable} />
+                  <span
+                    className={`absolute text-[10px] font-semibold ${
+                      unavailable ? "text-gray-300 line-through" : isSelected ? "" : "text-ink"
+                    }`}
+                    style={isSelected && !unavailable ? { color: "var(--tenant-primary)" } : undefined}
+                  >
+                    {spot.spotNumber}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </div>
       <p className="mt-2 text-xs text-ink-soft">
         {selected !== null

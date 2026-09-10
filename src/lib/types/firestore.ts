@@ -80,6 +80,11 @@ export interface BranchDoc {
 export interface RoomSpot {
   spotNumber: number;
   label: string;
+  /** Which row of the room's layout this spot sits in (0-indexed) — lets the admin
+   * arrange beds the way they're actually laid out on the floor, instead of a flat
+   * numbered list. Optional: rooms created before this feature existed don't have it,
+   * and render as a single row. */
+  row?: number;
 }
 
 export interface RoomDoc {

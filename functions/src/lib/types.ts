@@ -56,7 +56,7 @@ export interface BranchDoc {
 export interface RoomDoc {
   name: string;
   capacity: number;
-  spots: { spotNumber: number; label: string }[];
+  spots: { spotNumber: number; label: string; row?: number }[];
   blockedSpots: number[];
 }
 
