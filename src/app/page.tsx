@@ -1,4 +1,18 @@
 import Link from "next/link";
+import {
+  Armchair,
+  Building2,
+  CalendarDays,
+  CreditCard,
+  FileCheck,
+  Filter,
+  LayoutDashboard,
+  Link2,
+  MapPin,
+  Palette,
+  Smartphone,
+  UserPlus,
+} from "lucide-react";
 
 import { SiteHeader } from "@/components/marketing/SiteHeader";
 
@@ -35,22 +49,80 @@ const features = [
   },
 ];
 
-const steps = [
+const ownerSteps = [
   {
-    number: "1",
+    icon: Building2,
     title: "Crea tu estudio",
-    description: "Regístrate y en menos de un minuto tienes tu panel de administración listo.",
-  },
-  {
-    number: "2",
-    title: "Configura sedes y horarios",
-    description: "Agrega tus sucursales, tipos de clase, instructores y paquetes de créditos.",
-  },
-  {
-    number: "3",
-    title: "Comparte el link con tus alumnos",
     description:
-      "Cada estudio tiene su propia app de reservas — instalable, con su marca, lista para compartir por WhatsApp.",
+      "Regístrate con tu correo y en menos de un minuto tienes tu panel de administración listo, con el link único de reservas de tu estudio.",
+  },
+  {
+    icon: LayoutDashboard,
+    title: "Arma tu catálogo",
+    description:
+      "Agrega tus sedes y salas (con el número exacto de camas o lugares de cada una), tus tipos de clase, tus instructores y tus paquetes de créditos.",
+  },
+  {
+    icon: CalendarDays,
+    title: "Programa tus horarios",
+    description:
+      "Calendario visual por semana o por lista: crea una clase con un clic desde el propio calendario, y el sistema no te deja programar dos clases encimadas en la misma sala.",
+  },
+  {
+    icon: Palette,
+    title: "Personaliza tu presencia",
+    description:
+      "Tu logo y colores, la descripción y foto de tu estudio, tus redes, tus políticas y tu carta responsiva — todo con tu marca, no la nuestra.",
+  },
+  {
+    icon: Link2,
+    title: "Comparte tu link",
+    description:
+      "Cada estudio tiene su propia app de reservas, instalable en el celular sin pasar por tiendas de apps. Cópiala desde el panel y compártela por WhatsApp.",
+  },
+  {
+    icon: CreditCard,
+    title: "Opera el día a día",
+    description:
+      "Alumnos y sus créditos, pagos pendientes por confirmar, y un resumen de tu estudio en vivo — todo desde el mismo panel.",
+  },
+];
+
+const studentSteps = [
+  {
+    icon: UserPlus,
+    title: "Entran a tu link",
+    description:
+      "Nada de tiendas de apps: crean su cuenta y pueden instalar la app directo en su celular como cualquier otra.",
+  },
+  {
+    icon: Filter,
+    title: "Exploran el horario",
+    description: "Ven las clases disponibles en vista semana o mes, y filtran por nivel o por instructor.",
+  },
+  {
+    icon: Armchair,
+    title: "Reservan su lugar",
+    description:
+      "Eligen su cama o reformer específico, o dejan que el sistema se los asigne. Si la clase está llena, entran a una lista de espera automática.",
+  },
+  {
+    icon: FileCheck,
+    title: "Firman una vez",
+    description:
+      "Antes de su primera clase firman tu carta responsiva desde su perfil — queda un registro con su nombre, versión y fecha de firma.",
+  },
+  {
+    icon: CreditCard,
+    title: "Compran sus créditos",
+    description:
+      "Ven todos tus paquetes con precio en la sección Precios y piden comprarlo; tú confirmas el pago cuando llega y sus créditos se activan solos.",
+  },
+  {
+    icon: MapPin,
+    title: "Todo en su perfil",
+    description:
+      "Su próxima clase, su historial, sus créditos vigentes, y la información de tu estudio — dirección, mapa y cómo llegar incluidos.",
   },
 ];
 
@@ -107,16 +179,65 @@ export default function LandingPage() {
       <section id="como-funciona" className="scroll-mt-20 bg-white py-24">
         <div className="mx-auto max-w-5xl px-6">
           <h2 className="text-center text-2xl font-semibold text-ink">Cómo funciona</h2>
-          <div className="mt-10 grid gap-10 sm:grid-cols-3">
-            {steps.map((step) => (
-              <div key={step.number} className="text-center sm:text-left">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-sm font-semibold text-white">
-                  {step.number}
+          <p className="mx-auto mt-3 max-w-2xl text-center text-ink-soft">
+            Dos experiencias completas, ya armadas: tu panel de administración y la app
+            que usan tus alumnos para reservar.
+          </p>
+
+          <div className="mt-14 grid gap-12 lg:grid-cols-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-700">
+                  Tú, como dueño del estudio
                 </span>
-                <h3 className="mt-4 font-semibold text-ink">{step.title}</h3>
-                <p className="mt-2 text-sm text-ink-soft">{step.description}</p>
               </div>
-            ))}
+              <ol className="mt-6 space-y-6">
+                {ownerSteps.map((step, i) => (
+                  <li key={step.title} className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-700 text-white">
+                        <step.icon className="h-5 w-5" strokeWidth={1.75} />
+                      </span>
+                      {i < ownerSteps.length - 1 && <span className="mt-2 w-px flex-1 bg-gray-200" />}
+                    </div>
+                    <div className="pb-2">
+                      <h3 className="font-semibold text-ink">{step.title}</h3>
+                      <p className="mt-1 text-sm text-ink-soft">{step.description}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  Tus alumnos, en su app
+                </span>
+              </div>
+              <ol className="mt-6 space-y-6">
+                {studentSteps.map((step, i) => (
+                  <li key={step.title} className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-white">
+                        <step.icon className="h-5 w-5" strokeWidth={1.75} />
+                      </span>
+                      {i < studentSteps.length - 1 && <span className="mt-2 w-px flex-1 bg-gray-200" />}
+                    </div>
+                    <div className="pb-2">
+                      <h3 className="font-semibold text-ink">{step.title}</h3>
+                      <p className="mt-1 text-sm text-ink-soft">{step.description}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+
+          <div className="mt-14 flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-4 text-center text-sm text-ink-soft">
+            <Smartphone className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+            Ambas experiencias son instalables como app en el celular — nada que
+            descargar de una tienda de apps.
           </div>
         </div>
       </section>
