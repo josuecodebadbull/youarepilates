@@ -5,6 +5,29 @@
 :root {
   --tenant-primary: #1f2937;
   --tenant-secondary: #6b7280;
+
+  /* shadcn/kibo-ui tokens, mapped onto our own ink/canvas/brand palette (see
+   * tailwind.config.ts) so vendored components look native to this design system. */
+  --radius: 0.5rem;
+  --background: 0 0% 100%;
+  --foreground: 223 14% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 223 14% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 223 14% 10%;
+  --primary: 170 55% 23%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 223 14% 10%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 225 6% 38%;
+  --accent: 165 31% 95%;
+  --accent-foreground: 170 53% 18%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 170 55% 23%;
 }
 
 @layer base {

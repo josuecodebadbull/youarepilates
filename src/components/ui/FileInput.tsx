@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useState } from "react";
+
+import { Dropzone, DropzoneContent, DropzoneEmptyState } from "@/components/kibo/dropzone";
 
 interface FileInputProps {
   id: string;
@@ -13,31 +15,31 @@ interface FileInputProps {
  * A native `<input type="file">` renders its "Choose file / No file chosen" text with
  * an intrinsic width the browser controls, not CSS — inside a narrow flex/grid cell it
  * overflows the container (and the whole page, on mobile) instead of wrapping or
- * truncating. This hides the native input and drives the picker via a `<label>`
- * (the standard accessible way to trigger a hidden file input), rendering our own
- * button + truncated filename text instead.
+ * truncating. This wraps kibo-ui's Dropzone instead, for real drag-and-drop plus a
+ * layout that's ours to control.
  */
 export function FileInput({ id, accept, onChange, buttonLabel = "Elegir archivo" }: FileInputProps) {
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
 
-  function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    setFileName(file?.name ?? null);
-    onChange(file);
+  function handleDrop(acceptedFiles: File[]) {
+    const nextFile = acceptedFiles[0] ?? null;
+    setFile(nextFile);
+    onChange(nextFile);
   }
 
   return (
-    <div className="flex min-w-0 max-w-full items-center gap-3">
-      <label
-        htmlFor={id}
-        className="shrink-0 cursor-pointer rounded-lg bg-brand-700 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-800"
-      >
-        {buttonLabel}
-      </label>
-      <input id={id} type="file" accept={accept} onChange={handleChange} className="sr-only" />
-      <span className="min-w-0 flex-1 truncate text-sm text-gray-500">
-        {fileName ?? "Ningún archivo seleccionado"}
-      </span>
-    </div>
+    <Dropzone
+      id={id}
+      accept={accept ? { [accept]: [] } : undefined}
+      src={file ? [file] : undefined}
+      onDrop={handleDrop}
+      className="min-h-0 p-4"
+    >
+      <DropzoneEmptyState>
+        <p className="text-sm font-medium text-ink">{buttonLabel}</p>
+        <p className="mt-0.5 text-xs text-ink-soft">Arrastra o haz clic para subir</p>
+      </DropzoneEmptyState>
+      <DropzoneContent />
+    </Dropzone>
   );
 }

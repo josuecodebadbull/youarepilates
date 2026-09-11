@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   addDoc,
   collection,
@@ -10,7 +10,8 @@ import {
   Timestamp,
   where,
 } from "firebase/firestore";
-import { ChevronUp, GraduationCap } from "lucide-react";
+import { ChevronRight, GraduationCap } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
@@ -19,7 +20,17 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FormField, inputClass } from "@/components/ui/FormField";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
+import {
+  TableBody,
+  TableCell,
+  TableColumnHeader,
+  TableHead,
+  TableHeader,
+  TableProvider,
+  TableRow,
+} from "@/components/kibo/table";
 
 interface Student extends UserDoc {
   id: string;
@@ -31,12 +42,17 @@ interface Pass extends StudentPassDoc {
   id: string;
 }
 
+interface StudentRow extends Student {
+  totalCredits: number;
+}
+
 export default function AlumnosPage() {
   const { tenantId } = useTenant();
   const [students, setStudents] = useState<Student[]>([]);
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [creditsByStudent, setCreditsByStudent] = useState<Record<string, number>>({});
+  const [managingStudent, setManagingStudent] = useState<Student | null>(null);
 
   useEffect(() => {
     const studentsQuery = query(
@@ -58,6 +74,68 @@ export default function AlumnosPage() {
     );
   }, [tenantId]);
 
+  const studentIds = useMemo(() => students.map((s) => s.id).join(","), [students]);
+
+  useEffect(() => {
+    const ids = studentIds ? studentIds.split(",") : [];
+    const unsubscribes = ids.map((studentId) =>
+      onSnapshot(
+        query(
+          collection(db, "tenants", tenantId, "studentPasses"),
+          where("studentId", "==", studentId),
+          where("status", "==", "active"),
+        ),
+        (snapshot) => {
+          const total = snapshot.docs.reduce(
+            (sum, d) => sum + (d.data() as StudentPassDoc).remainingCredits,
+            0,
+          );
+          setCreditsByStudent((prev) => ({ ...prev, [studentId]: total }));
+        },
+      ),
+    );
+    return () => unsubscribes.forEach((unsub) => unsub());
+  }, [tenantId, studentIds]);
+
+  const rows: StudentRow[] = students.map((student) => ({
+    ...student,
+    totalCredits: creditsByStudent[student.id] ?? 0,
+  }));
+
+  const columns: ColumnDef<StudentRow>[] = [
+    {
+      accessorKey: "displayName",
+      header: ({ column }) => <TableColumnHeader column={column} title="Alumno" />,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <Avatar name={row.original.displayName || row.original.email} size={32} />
+          <div className="min-w-0">
+            <p className="truncate font-medium text-ink">{row.original.displayName || "(sin nombre)"}</p>
+            <p className="truncate text-xs text-ink-soft">{row.original.email}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "totalCredits",
+      header: ({ column }) => <TableColumnHeader column={column} title="Créditos" />,
+      cell: ({ row }) => (
+        <span className="font-medium text-ink">
+          {row.original.totalCredits > 0 ? row.original.totalCredits : "Sin créditos"}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => setManagingStudent(row.original)}>
+          Gestionar créditos
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <div>
       <PageHeader
@@ -72,35 +150,62 @@ export default function AlumnosPage() {
           description="Comparte el link de tu app (lo tienes en la barra lateral) para que empiecen a crear su cuenta."
         />
       ) : (
-        <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200">
-          {students.map((student) => (
-            <StudentRow
-              key={student.id}
-              tenantId={tenantId}
-              student={student}
-              packages={packages}
-              expanded={expandedId === student.id}
-              onToggle={() => setExpandedId((current) => (current === student.id ? null : student.id))}
-            />
-          ))}
-        </ul>
+        <>
+          {/* Mobile: a simple tappable card list. */}
+          <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 md:hidden">
+            {rows.map((student) => (
+              <li key={student.id}>
+                <button
+                  onClick={() => setManagingStudent(student)}
+                  className="flex w-full items-center gap-3 p-4 text-left hover:bg-gray-50"
+                >
+                  <Avatar name={student.displayName || student.email} size={40} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-gray-900">{student.displayName || "(sin nombre)"}</p>
+                    <p className="truncate text-sm text-gray-500">{student.email}</p>
+                  </div>
+                  <span className="shrink-0 text-sm font-medium text-gray-600">
+                    {student.totalCredits > 0 ? `${student.totalCredits} créditos` : "Sin créditos"}
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" strokeWidth={1.75} />
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          {/* Desktop: a sortable table — click a column title to sort by name or créditos. */}
+          <div className="hidden rounded-lg border border-gray-200 md:block">
+            <TableProvider columns={columns} data={rows}>
+              <TableHeader>{({ header }) => <TableHead header={header} key={header.id} />}</TableHeader>
+              <TableBody emptyMessage="Sin alumnos.">
+                {({ row }) => (
+                  <TableRow row={row} key={row.id}>
+                    {({ cell }) => <TableCell cell={cell} key={cell.id} />}
+                  </TableRow>
+                )}
+              </TableBody>
+            </TableProvider>
+          </div>
+        </>
+      )}
+
+      {managingStudent && (
+        <Modal title={managingStudent.displayName || managingStudent.email || "Alumno"} onClose={() => setManagingStudent(null)}>
+          <StudentCreditsPanel tenantId={tenantId} student={managingStudent} packages={packages} />
+        </Modal>
       )}
     </div>
   );
 }
 
-function StudentRow({
+function StudentCreditsPanel({
   tenantId,
   student,
   packages,
-  expanded,
-  onToggle,
 }: {
   tenantId: string;
   student: Student;
   packages: PackageItem[];
-  expanded: boolean;
-  onToggle: () => void;
 }) {
   const [passes, setPasses] = useState<Pass[]>([]);
 
@@ -118,47 +223,24 @@ function StudentRow({
   const totalCredits = passes.reduce((sum, pass) => sum + pass.remainingCredits, 0);
 
   return (
-    <li>
-      <button
-        onClick={onToggle}
-        className="flex w-full items-center gap-3 p-4 text-left hover:bg-gray-50"
-      >
-        <Avatar name={student.displayName || student.email} size={40} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-gray-900">
-            {student.displayName || "(sin nombre)"}
-          </p>
-          <p className="truncate text-sm text-gray-500">{student.email}</p>
-        </div>
-        {expanded ? (
-          <ChevronUp className="h-4 w-4 shrink-0 text-gray-400" strokeWidth={1.75} />
-        ) : (
-          <span className="shrink-0 text-sm font-medium text-gray-600">
-            {totalCredits > 0 ? `${totalCredits} créditos` : "Sin créditos"}
-          </span>
-        )}
-      </button>
-
-      {expanded && (
-        <div className="border-t border-gray-100 bg-gray-50 p-4">
-          <p className="text-sm font-medium text-gray-700">
-            Créditos activos: {totalCredits > 0 ? totalCredits : "ninguno"}
-          </p>
-          {passes.length > 0 && (
-            <ul className="mt-2 space-y-1 text-sm text-gray-600">
-              {passes.map((pass) => (
-                <li key={pass.id}>
-                  {pass.remainingCredits}/{pass.initialCredits} créditos · vence{" "}
-                  {pass.expiresAt.toDate().toLocaleDateString("es-MX")}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <AddCreditsForm tenantId={tenantId} studentId={student.id} packages={packages} />
-        </div>
+    <div className="space-y-4">
+      <p className="text-sm text-ink-soft">{student.email}</p>
+      <p className="text-sm font-medium text-ink">
+        Créditos activos: {totalCredits > 0 ? totalCredits : "ninguno"}
+      </p>
+      {passes.length > 0 && (
+        <ul className="space-y-1 text-sm text-ink-soft">
+          {passes.map((pass) => (
+            <li key={pass.id}>
+              {pass.remainingCredits}/{pass.initialCredits} créditos · vence{" "}
+              {pass.expiresAt.toDate().toLocaleDateString("es-MX")}
+            </li>
+          ))}
+        </ul>
       )}
-    </li>
+
+      <AddCreditsForm tenantId={tenantId} studentId={student.id} packages={packages} />
+    </div>
   );
 }
 
@@ -205,7 +287,7 @@ function AddCreditsForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-4 space-y-3 border-t border-gray-200 pt-4">
+    <form onSubmit={handleSubmit} className="space-y-3 border-t border-gray-200 pt-4">
       <h3 className="text-sm font-semibold text-gray-900">Dar créditos</h3>
 
       <FormField
