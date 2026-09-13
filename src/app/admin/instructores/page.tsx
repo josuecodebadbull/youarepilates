@@ -6,6 +6,7 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { Users } from "lucide-react";
 
 import { db, storage } from "@/lib/firebase/client";
+import { optimizeImage } from "@/lib/optimizeImage";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import type { InstructorDoc } from "@/lib/types/firestore";
 import { Avatar } from "@/components/ui/Avatar";
@@ -112,8 +113,9 @@ function InstructorForm({ tenantId, onDone }: { tenantId: string; onDone: () => 
       } satisfies InstructorDoc);
 
       if (photoFile) {
-        const photoRef = ref(storage, `tenants/${tenantId}/instructors/${docRef.id}/photo`);
-        await uploadBytes(photoRef, photoFile, { contentType: photoFile.type });
+        const { blob, contentType, extension } = await optimizeImage(photoFile);
+        const photoRef = ref(storage, `tenants/${tenantId}/instructors/${docRef.id}/photo.${extension}`);
+        await uploadBytes(photoRef, blob, { contentType });
         const photoUrl = await getDownloadURL(photoRef);
         await updateDoc(docRef, { photoUrl });
       }

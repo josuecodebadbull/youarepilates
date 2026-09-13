@@ -72,7 +72,13 @@ export interface BranchDoc {
   createdAt: Timestamp;
   /** All optional: branches created before this feature existed don't have them yet. */
   phone?: string;
+  /** @deprecated superseded by `photoUrls` (a real gallery). Kept so branches created
+   * before the gallery existed still show their one photo — read through `photoUrls`
+   * for display and fall back to this only when that's empty. */
   photoUrl?: string | null;
+  /** Gallery shown on the student "Estudio" page. Optimized client-side on upload
+   * (see src/lib/optimizeImage.ts) so a phone photo doesn't ship multiple MB. */
+  photoUrls?: string[];
   /** Free text: parking, qué llevar, instrucciones para llegar — shown on la página de Estudio. */
   arrivalNote?: string;
 }
@@ -108,6 +114,9 @@ export interface ClassTypeDoc {
   requiredCredits: number;
   description: string;
   level: ClassLevel;
+  /** Optional cover photo shown in the catalog. Optimized client-side on upload
+   * (see src/lib/optimizeImage.ts). */
+  photoUrl?: string | null;
 }
 
 export interface ScheduleDoc {

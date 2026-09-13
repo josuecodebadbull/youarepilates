@@ -17,6 +17,7 @@ import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import { DEFAULT_TENANT_PROFILE } from "@/lib/tenantProfile";
 import type { BranchDoc } from "@/lib/types/firestore";
+import { PhotoGallery } from "@/components/student/PhotoGallery";
 
 interface Branch extends BranchDoc {
   id: string;
@@ -139,11 +140,14 @@ export default function EstudioPage() {
 }
 
 function BranchCard({ branch }: { branch: Branch }) {
+  const galleryPhotos = branch.photoUrls?.length ? branch.photoUrls : branch.photoUrl ? [branch.photoUrl] : [];
+
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-card">
-      {branch.photoUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={branch.photoUrl} alt={branch.name} className="h-32 w-full object-cover" />
+      {galleryPhotos.length > 0 && (
+        <div className="px-3 pt-3">
+          <PhotoGallery photos={galleryPhotos} alt={branch.name} />
+        </div>
       )}
 
       <div className="p-4">

@@ -42,6 +42,7 @@ export interface ClassTypeDoc {
   requiredCredits: number;
   description: string;
   level: ClassLevel;
+  photoUrl?: string | null;
 }
 
 export interface BranchDoc {
@@ -49,7 +50,9 @@ export interface BranchDoc {
   address: string;
   createdAt: Timestamp;
   phone?: string;
+  /** @deprecated superseded by `photoUrls`. */
   photoUrl?: string | null;
+  photoUrls?: string[];
   arrivalNote?: string;
 }
 

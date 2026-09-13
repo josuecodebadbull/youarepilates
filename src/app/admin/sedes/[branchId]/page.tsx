@@ -14,17 +14,16 @@ import {
   query,
   updateDoc,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { ArrowLeft, BedDouble, ImagePlus, Pencil } from "lucide-react";
+import { ArrowLeft, BedDouble, Pencil } from "lucide-react";
 
-import { db, storage } from "@/lib/firebase/client";
+import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import { buildSpotsFromRowSizes, groupSpotsByRow, rowSizesFromSpots } from "@/lib/roomLayout";
 import type { BranchDoc, RoomDoc } from "@/lib/types/firestore";
+import { GalleryUploader } from "@/components/admin/GalleryUploader";
 import { RoomLayoutEditor } from "@/components/admin/RoomLayoutEditor";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { FileInput } from "@/components/ui/FileInput";
 import { FormField, inputClass } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -134,39 +133,16 @@ function BranchInfoForm({
 }) {
   const [phone, setPhone] = useState(branch.phone ?? "");
   const [arrivalNote, setArrivalNote] = useState(branch.arrivalNote ?? "");
-  const [photoUrl, setPhotoUrl] = useState(branch.photoUrl ?? null);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-
-  function handlePhotoChange(file: File | null) {
-    setPhotoFile(file);
-    setPhotoPreviewUrl((current) => {
-      if (current) URL.revokeObjectURL(current);
-      return file ? URL.createObjectURL(file) : null;
-    });
-  }
 
   async function handleSave() {
     setSaving(true);
     setSaved(false);
     try {
-      let nextPhotoUrl = photoUrl;
-      if (photoFile) {
-        const photoRef = ref(storage, `tenants/${tenantId}/branches/${branchId}/photo`);
-        await uploadBytes(photoRef, photoFile, { contentType: photoFile.type });
-        nextPhotoUrl = await getDownloadURL(photoRef);
-        setPhotoUrl(nextPhotoUrl);
-        if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
-        setPhotoFile(null);
-        setPhotoPreviewUrl(null);
-      }
-
       await updateDoc(doc(db, "tenants", tenantId, "branches", branchId), {
         phone,
         arrivalNote,
-        photoUrl: nextPhotoUrl,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -174,8 +150,6 @@ function BranchInfoForm({
       setSaving(false);
     }
   }
-
-  const displayedPhotoUrl = photoPreviewUrl ?? photoUrl;
 
   return (
     <div className="mb-6 max-w-2xl space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5">
@@ -185,18 +159,12 @@ function BranchInfoForm({
         y el mapa de esta sede, para que sepan cómo llegar a su clase.
       </p>
 
-      <FormField label="Foto de la sede" htmlFor="branch-photo" hint="Opcional">
-        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-white">
-            {displayedPhotoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={displayedPhotoUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <ImagePlus className="h-6 w-6 text-gray-300" strokeWidth={1.5} />
-            )}
-          </div>
-          <FileInput id="branch-photo" accept="image/*" onChange={handlePhotoChange} buttonLabel="Subir foto" />
-        </div>
+      <FormField
+        label="Galería de fotos"
+        htmlFor="branch-gallery"
+        hint="Opcional — se muestran como una galería en la app de tus alumnos"
+      >
+        <GalleryUploader tenantId={tenantId} branchId={branchId} photoUrls={branch.photoUrls ?? []} />
       </FormField>
 
       <FormField label="Teléfono de la sede" htmlFor="branch-phone" hint="Opcional — con lada">

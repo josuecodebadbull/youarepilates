@@ -6,6 +6,7 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { ImagePlus } from "lucide-react";
 
 import { db, storage } from "@/lib/firebase/client";
+import { optimizeImage } from "@/lib/optimizeImage";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import { DEFAULT_TENANT_PROFILE } from "@/lib/tenantProfile";
 import type { TenantProfile } from "@/lib/types/firestore";
@@ -46,8 +47,9 @@ export default function PerfilEstudioPage() {
     try {
       let nextHeroImageUrl = heroImageUrl;
       if (heroFile) {
-        const heroRef = ref(storage, `tenants/${tenantId}/profile/hero`);
-        await uploadBytes(heroRef, heroFile, { contentType: heroFile.type });
+        const { blob, contentType, extension } = await optimizeImage(heroFile);
+        const heroRef = ref(storage, `tenants/${tenantId}/profile/hero.${extension}`);
+        await uploadBytes(heroRef, blob, { contentType });
         nextHeroImageUrl = await getDownloadURL(heroRef);
         setHeroImageUrl(nextHeroImageUrl);
         if (heroPreviewUrl) URL.revokeObjectURL(heroPreviewUrl);

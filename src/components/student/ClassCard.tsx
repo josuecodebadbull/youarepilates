@@ -23,7 +23,16 @@ export function ClassCard({ schedule, classType, instructor, action }: ClassCard
 
   return (
     <div className="flex gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <Avatar name={instructor?.name ?? "?"} photoUrl={instructor?.photoUrl} size={44} />
+      {classType?.photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={classType.photoUrl}
+          alt=""
+          className="h-11 w-11 shrink-0 rounded-lg object-cover"
+        />
+      ) : (
+        <Avatar name={instructor?.name ?? "?"} photoUrl={instructor?.photoUrl} size={44} />
+      )}
 
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">

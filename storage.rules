@@ -42,9 +42,17 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
-    // Branch photos (shown on the student PWA's "Estudio" page): public read,
-    // staff-only write.
+    // Branch photos, including the gallery (shown on the student PWA's "Estudio"
+    // page): public read, staff-only write.
     match /tenants/{tenantId}/branches/{branchId}/{fileName} {
+      allow read: if true;
+      allow write: if isTenantStaff(tenantId)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Class type cover photos (shown in the catalog): public read, staff-only write.
+    match /tenants/{tenantId}/classTypes/{classTypeId}/{fileName} {
       allow read: if true;
       allow write: if isTenantStaff(tenantId)
         && request.resource.size < 5 * 1024 * 1024
