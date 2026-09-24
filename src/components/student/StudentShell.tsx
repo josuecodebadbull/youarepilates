@@ -60,6 +60,9 @@ export function StudentShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const pathname = usePathname();
   const base = pathname.split("/").slice(0, 3).join("/");
+  // The studio page is a two-column layout on desktop; the other screens are single
+  // task-focused columns that would look stretched at full width.
+  const isWide = pathname === `${base}/estudio`;
 
   const navItems = [
     { href: base, label: "Reservar", icon: CalendarIcon },
@@ -70,46 +73,95 @@ export function StudentShell({ children }: { children: ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      <header
-        className="flex items-center justify-between px-4 py-3 text-white"
-        style={{ backgroundColor: "var(--tenant-primary)" }}
-      >
-        <span className="font-semibold">{tenant.name}</span>
-        {user ? (
-          <button onClick={() => signOut(auth)} className="text-sm underline">
-            Salir
-          </button>
-        ) : (
-          <Link href={`${base}/login`} className="text-sm underline">
-            Ingresar
+    <div className="flex min-h-screen flex-col bg-canvas pb-28 min-[900px]:pb-0">
+      <header className="sticky top-0 z-20 border-b border-ink/[0.07] bg-canvas/90 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-[1160px] items-center justify-between gap-6 px-5">
+          <Link href={base} className="flex min-w-0 items-center gap-2.5">
+            {tenant.branding.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={tenant.branding.logoUrl}
+                alt={tenant.name}
+                className="h-[30px] w-auto mix-blend-multiply"
+              />
+            ) : (
+              <span className="truncate font-display text-lg font-semibold tracking-tight text-ink">
+                {tenant.name}
+              </span>
+            )}
           </Link>
-        )}
+
+          <nav className="hidden items-center gap-1 min-[900px]:flex">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex h-10 items-center rounded-full px-3.5 text-sm font-semibold transition-colors ${
+                    isActive ? "bg-[#EDEBE6] text-ink" : "text-ink-soft hover:text-brand-700"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="flex items-center gap-2">
+            {user ? (
+              <button
+                onClick={() => signOut(auth)}
+                className="flex h-10 items-center rounded-full border border-ink/[0.18] bg-white px-4 text-sm font-semibold text-ink"
+              >
+                Salir
+              </button>
+            ) : (
+              <Link
+                href={`${base}/login`}
+                className="flex h-10 items-center rounded-full border border-ink/[0.18] bg-white px-4 text-sm font-semibold text-ink"
+              >
+                Ingresar
+              </Link>
+            )}
+            <Link
+              href={base}
+              className="hidden h-10 items-center rounded-full bg-ink px-[18px] text-sm font-semibold text-white min-[900px]:flex"
+            >
+              Reservar clase
+            </Link>
+          </div>
+        </div>
       </header>
 
-      <main className="px-4 py-5">
-        <Suspense fallback={null}>
-          <InstallAppPrompt />
-        </Suspense>
-        {children}
+      <main className={`mx-auto w-full flex-1 px-5 ${isWide ? "max-w-[1160px]" : "max-w-3xl"}`}>
+        <div className={isWide ? "pt-6 min-[900px]:pt-10 min-[900px]:pb-16" : "py-5"}>
+          <Suspense fallback={null}>
+            <InstallAppPrompt />
+          </Suspense>
+          {children}
+        </div>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 flex border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href;
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs"
-              style={{ color: isActive ? "var(--tenant-primary)" : "#6b7280" }}
-            >
-              <Icon active={isActive} />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t from-canvas from-60% to-transparent px-3 pb-[calc(10px+env(safe-area-inset-bottom))] pt-2.5 min-[900px]:hidden">
+        <div className="flex gap-1 rounded-[22px] border border-ink/[0.08] bg-white p-1.5 shadow-[0_10px_30px_-10px_rgba(22,24,29,0.25)]">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href;
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex min-h-[56px] flex-1 flex-col items-center justify-center gap-[3px] rounded-2xl text-[11px] font-semibold ${
+                  isActive ? "bg-ink text-white" : "text-[#6b6e76]"
+                }`}
+              >
+                <Icon active={isActive} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </div>
   );

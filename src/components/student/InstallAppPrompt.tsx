@@ -4,23 +4,9 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Download, Share, X } from "lucide-react";
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
+import { useInstallPrompt } from "@/components/pwa/useInstallPrompt";
 
 const DISMISS_KEY = "yap-install-dismissed";
-
-function isStandalone(): boolean {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-}
-
-function isIos(): boolean {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
-}
 
 /**
  * "Instala la app" banner for the student PWA. Chrome/Android fire `beforeinstallprompt`,
@@ -32,46 +18,20 @@ function isIos(): boolean {
 export function InstallAppPrompt() {
   const searchParams = useSearchParams();
   const forced = searchParams.get("instalar") === "1";
-  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [ios, setIos] = useState(false);
-  const [visible, setVisible] = useState(false);
+  const { installed, canPrompt, ios, install } = useInstallPrompt();
+  const [dismissed, setDismissed] = useState(true);
   const [showIosSteps, setShowIosSteps] = useState(false);
 
   useEffect(() => {
-    if (isStandalone()) return;
-
-    let dismissed = false;
     try {
-      dismissed = localStorage.getItem(DISMISS_KEY) === "1";
+      setDismissed(localStorage.getItem(DISMISS_KEY) === "1");
     } catch {
-      // Storage can be blocked (private mode); just show the banner.
+      setDismissed(false); // Storage can be blocked (private mode); just show the banner.
     }
-
-    const onBeforeInstall = (event: Event) => {
-      event.preventDefault();
-      setInstallEvent(event as BeforeInstallPromptEvent);
-      if (!dismissed || forced) setVisible(true);
-    };
-    const onInstalled = () => setVisible(false);
-    window.addEventListener("beforeinstallprompt", onBeforeInstall);
-    window.addEventListener("appinstalled", onInstalled);
-
-    if (isIos()) {
-      setIos(true);
-      if (!dismissed || forced) setVisible(true);
-    } else if (forced) {
-      // Desktop browsers without an install event still get a hint about the browser menu.
-      setVisible(true);
-    }
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, [forced]);
+  }, []);
 
   function dismiss() {
-    setVisible(false);
+    setDismissed(true);
     try {
       localStorage.setItem(DISMISS_KEY, "1");
     } catch {
@@ -79,13 +39,9 @@ export function InstallAppPrompt() {
     }
   }
 
-  async function install() {
-    if (!installEvent) return;
-    await installEvent.prompt();
-    const { outcome } = await installEvent.userChoice;
-    setInstallEvent(null);
-    if (outcome === "accepted") setVisible(false);
-  }
+  // Desktop browsers without an install event only get the hint when asked via the link.
+  const visible = !installed && (forced || (!dismissed && (canPrompt || ios)));
+  const installEvent = canPrompt;
 
   if (!visible) return null;
 
@@ -106,7 +62,7 @@ export function InstallAppPrompt() {
 
           {installEvent && (
             <button
-              onClick={install}
+              onClick={() => void install()}
               className="mt-3 rounded-lg px-4 py-2 text-sm font-semibold text-white"
               style={{ backgroundColor: "var(--tenant-primary)" }}
             >

@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { Download } from "lucide-react";
 
-import { APP_INSTALL_HREF } from "@/lib/marketing";
+import { InstallAdminButton } from "@/components/pwa/InstallAdminButton";
 
 export function SiteHeader() {
   return (
@@ -27,13 +26,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2 text-sm sm:gap-3">
-          <Link
-            href={APP_INSTALL_HREF}
-            className="hidden items-center gap-1.5 font-medium text-ink-soft hover:text-ink sm:inline-flex"
-          >
-            <Download className="h-4 w-4" strokeWidth={2} />
-            Descargar app
-          </Link>
+          <InstallAdminButton className="hidden items-center gap-1.5 font-medium text-ink-soft hover:text-ink sm:inline-flex" />
           <Link href="/login" className="hidden font-medium text-ink-soft hover:text-ink sm:inline">
             Iniciar sesión
           </Link>

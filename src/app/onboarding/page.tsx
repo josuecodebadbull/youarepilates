@@ -5,12 +5,15 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { FirebaseError } from "firebase/app";
 import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, updateDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { ArrowLeft } from "lucide-react";
 
-import { auth, functions } from "@/lib/firebase/client";
+import { auth, db, functions } from "@/lib/firebase/client";
+import { DEFAULT_TENANT_PROFILE, draftFromProfile, profileFromDraft, type ProfileDraft } from "@/lib/tenantProfile";
 import { Button } from "@/components/ui/Button";
 import { FormField, inputClass } from "@/components/ui/FormField";
+import { StudioProfileFields } from "@/components/admin/StudioProfileFields";
 
 interface OnboardTenantResult {
   tenantId: string;
@@ -37,6 +40,30 @@ export default function OnboardingPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Set once the account + studio exist; switches the page to step 2 (studio profile).
+  const [created, setCreated] = useState<OnboardTenantResult | null>(null);
+  const [draft, setDraft] = useState<ProfileDraft>(() => draftFromProfile(DEFAULT_TENANT_PROFILE));
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  function goToPanel(slug: string) {
+    router.push(`/admin?welcome=${slug}`);
+  }
+
+  async function saveProfileAndContinue() {
+    if (!created) return;
+    setSavingProfile(true);
+    setProfileError(null);
+    try {
+      await updateDoc(doc(db, "tenants", created.tenantId), {
+        profile: profileFromDraft(draft, null),
+      });
+      goToPanel(created.slug);
+    } catch {
+      setProfileError("No se pudo guardar. Puedes omitir este paso y completarlo después en el panel.");
+      setSavingProfile(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -56,12 +83,42 @@ export default function OnboardingPage() {
       // refresh so the next navigation carries them.
       await credential.user.getIdToken(true);
 
-      router.push(`/admin?welcome=${result.data.slug}`);
+      setCreated(result.data);
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (created) {
+    return (
+      <main className="min-h-screen px-6 py-12">
+        <div className="mx-auto w-full max-w-2xl">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Paso 2 de 2</p>
+          <h1 className="mt-1 text-2xl font-semibold text-ink">Cuéntanos de tu estudio</h1>
+          <p className="mt-1 text-sm text-ink-soft">
+            Esto es lo que tus alumnos verán en la página de tu estudio. Todo es opcional y lo puedes
+            cambiar cuando quieras desde el panel, en Perfil del estudio.
+          </p>
+
+          <div className="mt-6">
+            <StudioProfileFields value={draft} onChange={setDraft} />
+          </div>
+
+          {profileError && <p className="mt-4 text-sm text-red-600">{profileError}</p>}
+
+          <div className="sticky bottom-0 -mx-6 mt-6 flex flex-wrap items-center gap-3 border-t border-gray-200 bg-canvas/95 px-6 py-4 backdrop-blur">
+            <Button onClick={saveProfileAndContinue} disabled={savingProfile}>
+              {savingProfile ? "Guardando..." : "Guardar y entrar a mi panel"}
+            </Button>
+            <Button variant="ghost" onClick={() => goToPanel(created.slug)} disabled={savingProfile}>
+              Omitir por ahora
+            </Button>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -72,9 +129,10 @@ export default function OnboardingPage() {
         </Link>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-soft">
-          <h1 className="text-2xl font-semibold text-ink">Crea tu estudio</h1>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Paso 1 de 2</p>
+          <h1 className="mt-1 text-2xl font-semibold text-ink">Crea tu estudio</h1>
           <p className="mt-1 text-sm text-ink-soft">
-            En menos de un minuto tendrás tu panel de administración listo.
+            Crea tu cuenta y en menos de un minuto tendrás tu panel de administración listo.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">

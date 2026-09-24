@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import { getTenantBySlug } from "@/lib/tenant/resolveTenant";
 import { StudentProviders } from "@/components/student/StudentProviders";
 import { StudentShell } from "@/components/student/StudentShell";
-import { ServiceWorkerRegistration } from "@/components/student/ServiceWorkerRegistration";
 
 // Live schedules/credits and auth-gated screens — never prerendered at build time.
 export const dynamic = "force-dynamic";
@@ -50,7 +49,6 @@ export default async function StudentTenantLayout({
 
   return (
     <StudentProviders tenantId={tenant.id} tenant={tenant.data}>
-      <ServiceWorkerRegistration />
       <StudentShell>{children}</StudentShell>
     </StudentProviders>
   );

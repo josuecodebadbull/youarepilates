@@ -44,14 +44,36 @@ export function PhotoGallery({ photos, alt, className, thumbClassName }: PhotoGa
         ))}
       </div>
 
-      <Lightbox
-        open={openIndex !== null}
-        close={() => setOpenIndex(null)}
-        index={openIndex ?? 0}
-        slides={photos.map((src) => ({ src, alt }))}
-        plugins={[Thumbnails, Counter]}
-        counter={{ container: { style: { top: 0, bottom: "unset" } } }}
+      <PhotoLightbox
+        photos={photos}
+        alt={alt}
+        index={openIndex}
+        onClose={() => setOpenIndex(null)}
       />
     </>
+  );
+}
+
+/** Full-screen swipeable viewer. `index` is the open photo, or null when closed. */
+export function PhotoLightbox({
+  photos,
+  alt,
+  index,
+  onClose,
+}: {
+  photos: string[];
+  alt: string;
+  index: number | null;
+  onClose: () => void;
+}) {
+  return (
+    <Lightbox
+      open={index !== null}
+      close={onClose}
+      index={index ?? 0}
+      slides={photos.map((src) => ({ src, alt }))}
+      plugins={[Thumbnails, Counter]}
+      counter={{ container: { style: { top: 0, bottom: "unset" } } }}
+    />
   );
 }

@@ -57,6 +57,8 @@ export interface TenantDoc {
 }
 
 export interface TenantProfile {
+  /** Short line above the studio name on the public page, e.g. "Pilates Reformer · Roma Norte, CDMX". */
+  tagline?: string;
   description: string;
   heroImageUrl: string | null;
   instagramUrl: string;
