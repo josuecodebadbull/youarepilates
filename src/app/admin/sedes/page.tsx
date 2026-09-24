@@ -2,23 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
-import {
-  addDoc,
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-} from "firebase/firestore";
-import { Building2, ChevronRight } from "lucide-react";
+import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
+import { MapPin } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
-import type { BranchDoc } from "@/lib/types/firestore";
-import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { FormField, inputClass } from "@/components/ui/FormField";
+import type { BranchDoc, RoomDoc } from "@/lib/types/firestore";
+import { sheetInputClass } from "@/components/ui/FormField";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { useToast } from "@/components/admin/Toast";
+import { AddTile, PrimaryAction, SheetFooter, Tag, fieldLabelClass } from "@/components/admin/ui";
 
 interface Branch extends BranchDoc {
   id: string;
@@ -31,14 +25,9 @@ export default function SedesPage() {
   const [formOpen, setFormOpen] = useState(false);
 
   useEffect(() => {
-    const branchesQuery = query(
-      collection(db, "tenants", tenantId, "branches"),
-      orderBy("name"),
-    );
+    const branchesQuery = query(collection(db, "tenants", tenantId, "branches"), orderBy("name"));
     return onSnapshot(branchesQuery, (snapshot) => {
-      setBranches(
-        snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as BranchDoc) })),
-      );
+      setBranches(snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as BranchDoc) })));
       setLoaded(true);
     });
   }, [tenantId]);
@@ -47,47 +36,79 @@ export default function SedesPage() {
     <div>
       <PageHeader
         title="Sedes"
-        description="Las sucursales físicas de tu estudio. Entra a una sede para gestionar sus salas y camas de reformer."
-        action={
-          !formOpen && (
-            <Button onClick={() => setFormOpen(true)}>+ Agregar sede</Button>
-          )
-        }
+        description="Tus sucursales. Entra a una para gestionar sus salas, camas y lo que ven tus alumnos."
+        action={<PrimaryAction onClick={() => setFormOpen(true)}>Agregar sede</PrimaryAction>}
       />
 
-      {formOpen && (
-        <BranchForm tenantId={tenantId} onDone={() => setFormOpen(false)} />
-      )}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))] gap-3.5">
+        {branches.map((branch) => (
+          <BranchCard key={branch.id} tenantId={tenantId} branch={branch} />
+        ))}
+        {loaded && (
+          <AddTile
+            label={branches.length === 0 ? "Agrega tu primera sede" : "Nueva sede"}
+            onClick={() => setFormOpen(true)}
+            className="min-h-[220px]"
+          />
+        )}
+      </div>
 
-      {loaded && branches.length === 0 && !formOpen ? (
-        <EmptyState
-          icon={<Building2 className="h-7 w-7" strokeWidth={1.75} />}
-          title="Todavía no tienes sedes"
-          description="Agrega tu primera sede para poder crear salas y programar horarios de clases."
-          action={<Button onClick={() => setFormOpen(true)}>+ Agregar mi primera sede</Button>}
-        />
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {branches.map((branch) => (
-            <Link
-              key={branch.id}
-              href={`/admin/sedes/${branch.id}`}
-              className="flex items-center justify-between rounded-lg border border-gray-200 p-5 hover:border-gray-400 hover:bg-gray-50"
-            >
-              <div>
-                <p className="font-medium text-gray-900">{branch.name}</p>
-                <p className="mt-1 text-sm text-gray-500">{branch.address}</p>
-              </div>
-              <ChevronRight aria-hidden className="h-5 w-5 shrink-0 text-gray-400" strokeWidth={1.75} />
-            </Link>
-          ))}
-        </div>
-      )}
+      {formOpen && <BranchSheet tenantId={tenantId} onDone={() => setFormOpen(false)} />}
     </div>
   );
 }
 
-function BranchForm({ tenantId, onDone }: { tenantId: string; onDone: () => void }) {
+function BranchCard({ tenantId, branch }: { tenantId: string; branch: Branch }) {
+  const [rooms, setRooms] = useState<RoomDoc[] | null>(null);
+
+  useEffect(() => {
+    return onSnapshot(collection(db, "tenants", tenantId, "branches", branch.id, "rooms"), (snap) =>
+      setRooms(snap.docs.map((d) => d.data() as RoomDoc)),
+    );
+  }, [tenantId, branch.id]);
+
+  const cover = branch.photoUrls?.[0] ?? branch.photoUrl ?? null;
+  const beds = rooms?.reduce((sum, r) => sum + r.capacity, 0) ?? 0;
+  const available = rooms?.reduce((sum, r) => sum + r.capacity - r.blockedSpots.length, 0) ?? 0;
+
+  return (
+    <Link
+      href={`/admin/sedes/${branch.id}`}
+      className="flex flex-col overflow-hidden rounded-[22px] border border-ink/[0.08] bg-white text-ink transition-colors hover:border-ink/[0.16] hover:text-ink"
+    >
+      {cover ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={cover} alt="" className="aspect-video w-full object-cover" />
+      ) : (
+        <div className="flex aspect-video w-full items-center justify-center bg-brand-50 text-brand-300">
+          <MapPin className="h-10 w-10" strokeWidth={1.4} />
+        </div>
+      )}
+      <div className="flex flex-col gap-2.5 px-[18px] pb-[18px] pt-4">
+        <div className="flex flex-col gap-1">
+          <span className="text-base font-bold">{branch.name}</span>
+          <span className="text-[13px] leading-normal text-ink-soft">{branch.address}</span>
+        </div>
+        {rooms && (
+          <div className="flex flex-wrap gap-1.5">
+            <Tag>
+              {rooms.length} {rooms.length === 1 ? "sala" : "salas"}
+            </Tag>
+            {rooms.length > 0 && (
+              <Tag>
+                {available === beds ? `${beds} camas` : `${available} de ${beds} camas`}
+              </Tag>
+            )}
+            {rooms.length === 0 && <Tag tone="brand">Agrega una sala</Tag>}
+          </div>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+function BranchSheet({ tenantId, onDone }: { tenantId: string; onDone: () => void }) {
+  const toast = useToast();
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -97,63 +118,50 @@ function BranchForm({ tenantId, onDone }: { tenantId: string; onDone: () => void
     setSubmitting(true);
     try {
       await addDoc(collection(db, "tenants", tenantId, "branches"), {
-        name,
-        address,
+        name: name.trim(),
+        address: address.trim(),
         createdAt: serverTimestamp(),
       });
+      toast("Sede creada");
       onDone();
     } finally {
       setSubmitting(false);
     }
   }
 
+  const hintClass = "text-xs font-normal text-ink-faint";
+
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mb-6 max-w-2xl space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5"
+    <Modal
+      title="Nueva sede"
+      subtitle="Después podrás agregar sus salas y fotos"
+      onClose={onDone}
+      footer={<SheetFooter formId="branch-form" onCancel={onDone} submitting={submitting} label="Crear sede" />}
     >
-      <h2 className="font-semibold text-gray-900">Nueva sede</h2>
-
-      <FormField
-        label="Nombre de la sede"
-        htmlFor="branch-name"
-        hint="Así la verán tus alumnos al elegir dónde tomar su clase. Ejemplo: Sucursal Condesa"
-        required
-      >
-        <input
-          id="branch-name"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Sucursal Condesa"
-          className={inputClass}
-        />
-      </FormField>
-
-      <FormField
-        label="Dirección"
-        htmlFor="branch-address"
-        hint="Dirección completa, para que tus alumnos sepan cómo llegar"
-        required
-      >
-        <input
-          id="branch-address"
-          required
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="Av. Michoacán 123, Roma Norte, CDMX"
-          className={inputClass}
-        />
-      </FormField>
-
-      <div className="flex gap-2">
-        <Button type="submit" disabled={submitting}>
-          {submitting ? "Guardando..." : "Guardar sede"}
-        </Button>
-        <Button type="button" variant="ghost" onClick={onDone}>
-          Cancelar
-        </Button>
-      </div>
-    </form>
+      <form id="branch-form" onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+        <label className={fieldLabelClass}>
+          Nombre de la sede
+          <input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Sucursal Condesa"
+            className={sheetInputClass}
+          />
+          <span className={hintClass}>Así la verán tus alumnos al elegir dónde tomar clase.</span>
+        </label>
+        <label className={fieldLabelClass}>
+          Dirección completa
+          <input
+            required
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Av. Michoacán 123, Roma Norte, CDMX"
+            className={sheetInputClass}
+          />
+          <span className={hintClass}>Se usa para el mapa y el botón “Cómo llegar”.</span>
+        </label>
+      </form>
+    </Modal>
   );
 }

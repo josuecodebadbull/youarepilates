@@ -1,29 +1,29 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { addDays, isSameDay } from "@/lib/calendarDate";
-import type { ClassTypeDoc, InstructorDoc, ScheduleDoc } from "@/lib/types/firestore";
-import { Button } from "@/components/ui/Button";
+import { LEVEL_COLORS, LEVEL_LABELS } from "@/lib/classLevel";
+import { formatTime } from "@/lib/admin/data";
+import type { ClassLevel, ClassTypeDoc, InstructorDoc, ScheduleDoc } from "@/lib/types/firestore";
+import { capacityLabel } from "@/components/admin/ClassRow";
 
 interface Schedule extends ScheduleDoc {
   id: string;
 }
 
-const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+export const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const HOUR_HEIGHT = 56;
-const MIN_START_HOUR = 6;
+const MIN_START_HOUR = 7;
 const MIN_END_HOUR = 21;
+const GUTTER = 56;
 
 interface WeekCalendarProps {
   weekStart: Date;
   schedules: Schedule[];
   classTypes: Record<string, ClassTypeDoc>;
   instructors: Record<string, InstructorDoc>;
-  onPrevWeek: () => void;
-  onNextWeek: () => void;
-  onToday: () => void;
-  /** Called with the day + hour of an empty cell the user clicked, to open the "programar clase" modal prefilled. */
+  /** Called with the day + hour of an empty cell the user clicked, to open the "programar clase" sheet prefilled. */
   onSlotClick?: (day: Date, hour: number) => void;
   /** Called when an existing class block is clicked, to manage its roster. */
   onScheduleClick?: (schedule: Schedule) => void;
@@ -34,16 +34,12 @@ export function WeekCalendar({
   schedules,
   classTypes,
   instructors,
-  onPrevWeek,
-  onNextWeek,
-  onToday,
   onSlotClick,
   onScheduleClick,
 }: WeekCalendarProps) {
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
   const { startHour, endHour } = useMemo(() => {
-    if (schedules.length === 0) return { startHour: MIN_START_HOUR, endHour: MIN_END_HOUR };
     let minHour = MIN_START_HOUR;
     let maxHour = MIN_END_HOUR;
     for (const schedule of schedules) {
@@ -60,134 +56,157 @@ export function WeekCalendar({
     [startHour, endHour],
   );
   const gridHeight = hours.length * HOUR_HEIGHT;
-  const today = new Date();
 
-  const rangeLabel = `${weekStart.toLocaleDateString("es-MX", { day: "numeric", month: "short" })} – ${addDays(
-    weekStart,
-    6,
-  ).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}`;
+  // Re-render every minute so the "now" line moves.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const todayIndex = days.findIndex((d) => isSameDay(d, now));
+  const nowOffset = ((now.getHours() - startHour) * 60 + now.getMinutes()) * (HOUR_HEIGHT / 60);
+  const showNowLine = todayIndex >= 0 && nowOffset >= 0 && nowOffset <= gridHeight;
+
+  const usedLevels = useMemo(() => {
+    const levels = new Set<ClassLevel>(Object.values(classTypes).map((c) => c.level));
+    return (Object.keys(LEVEL_LABELS) as ClassLevel[]).filter((l) => levels.has(l));
+  }, [classTypes]);
 
   return (
-    <div className="rounded-lg border border-gray-200">
-      <div className="flex items-center justify-between border-b border-gray-200 p-3">
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" className="px-2 py-1" onClick={onPrevWeek} aria-label="Semana anterior">
-            ‹
-          </Button>
-          <Button variant="secondary" className="px-2 py-1" onClick={onNextWeek} aria-label="Semana siguiente">
-            ›
-          </Button>
-          <Button variant="ghost" className="px-2 py-1" onClick={onToday}>
-            Hoy
-          </Button>
-        </div>
-        <p className="text-sm font-medium capitalize text-gray-700">{rangeLabel}</p>
-      </div>
-
-      {onSlotClick && (
-        <p className="border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-xs text-gray-500">
-          Haz clic en un espacio vacío del calendario para programar una clase ahí.
-        </p>
-      )}
-
-      <div className="overflow-x-auto">
-        <div className="grid min-w-[720px] grid-cols-[48px_repeat(7,1fr)]">
-          <div />
-          {days.map((day) => (
-            <div
-              key={day.toISOString()}
-              className={`border-b border-l border-gray-200 py-2 text-center text-xs font-medium ${
-                isSameDay(day, today) ? "bg-indigo-50 text-indigo-700" : "text-gray-500"
-              }`}
-            >
-              <div className="uppercase">{DAY_LABELS[(day.getDay() + 6) % 7]}</div>
-              <div className="text-sm text-gray-900">{day.getDate()}</div>
-            </div>
-          ))}
-
-          <div className="relative" style={{ height: gridHeight }}>
-            {hours.map((hour, i) => (
-              <div
-                key={hour}
-                className="absolute inset-x-0 -translate-y-1/2 pr-2 text-right text-[11px] text-gray-400"
-                style={{ top: i * HOUR_HEIGHT }}
-              >
-                {hour}:00
-              </div>
-            ))}
+    <div className="flex flex-col gap-3">
+      <div className="overflow-x-auto rounded-[22px] border border-ink/[0.08] bg-white">
+        <div className="min-w-[760px]">
+          <div
+            className="grid border-b border-ink/[0.08]"
+            style={{ gridTemplateColumns: `${GUTTER}px repeat(7, minmax(0, 1fr))` }}
+          >
+            <span />
+            {days.map((day, i) => {
+              const isToday = i === todayIndex;
+              return (
+                <div key={day.toISOString()} className="flex flex-col items-center gap-1 border-l border-ink/[0.06] py-3">
+                  <span className="text-xs font-semibold text-ink-faint">{DAY_LABELS[i]}</span>
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-full text-[15px] font-bold ${
+                      isToday ? "bg-ink text-white" : "text-ink"
+                    }`}
+                  >
+                    {day.getDate()}
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
-          {days.map((day) => {
-            const daySchedules = schedules.filter((s) => isSameDay(s.startAt.toDate(), day));
-            return (
-              <div
-                key={day.toISOString()}
-                onClick={
-                  onSlotClick
-                    ? (e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const offsetY = e.clientY - rect.top;
-                        const hour = startHour + Math.floor(offsetY / HOUR_HEIGHT);
-                        onSlotClick(day, hour);
-                      }
-                    : undefined
-                }
-                className={`relative border-l border-gray-200 ${onSlotClick ? "cursor-pointer hover:bg-brand-50/40" : ""}`}
-                style={{
-                  height: gridHeight,
-                  backgroundImage: `repeating-linear-gradient(to bottom, #e5e7eb 0, #e5e7eb 1px, transparent 1px, transparent ${HOUR_HEIGHT}px)`,
-                }}
-              >
-                {daySchedules.map((schedule) => {
-                  const start = schedule.startAt.toDate();
-                  const end = schedule.endAt.toDate();
-                  const top = ((start.getHours() - startHour) * 60 + start.getMinutes()) * (HOUR_HEIGHT / 60);
-                  const height = Math.max(
-                    ((end.getTime() - start.getTime()) / 60_000) * (HOUR_HEIGHT / 60),
-                    18,
-                  );
-                  const isFull = schedule.bookedCount >= schedule.capacity;
-                  const classType = classTypes[schedule.classTypeId];
-                  const instructor = instructors[schedule.instructorId];
-                  const timeLabel = start.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+          <div
+            className="relative grid"
+            style={{ gridTemplateColumns: `${GUTTER}px repeat(7, minmax(0, 1fr))` }}
+          >
+            <div className="flex flex-col">
+              {hours.map((hour) => (
+                <div
+                  key={hour}
+                  className="box-border pr-2.5 pt-1 text-right text-[11px] tabular-nums text-ink-faint"
+                  style={{ height: HOUR_HEIGHT }}
+                >
+                  {String(hour).padStart(2, "0")}:00
+                </div>
+              ))}
+            </div>
 
-                  return (
-                    <div
-                      key={schedule.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onScheduleClick?.(schedule);
-                      }}
-                      title={`${classType?.name ?? "Clase"} · ${timeLabel} · ${instructor?.name ?? ""} · ${schedule.bookedCount}/${schedule.capacity}`}
-                      className={`absolute inset-x-0.5 overflow-hidden rounded border px-1.5 py-0.5 text-[11px] leading-tight ${onScheduleClick ? "cursor-pointer hover:brightness-95" : ""} ${
-                        isFull
-                          ? "border-red-200 bg-red-100 text-red-800"
-                          : "border-green-200 bg-green-100 text-green-800"
-                      }`}
-                      style={{ top, height }}
-                    >
-                      <p className="truncate font-semibold">{classType?.name ?? "Clase"}</p>
-                      <p className="truncate">{timeLabel}</p>
-                      <p className="truncate">
-                        {schedule.bookedCount}/{schedule.capacity}
-                        {schedule.waitlistCount > 0 ? ` · ${schedule.waitlistCount} espera` : ""}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
+            {days.map((day, i) => {
+              const daySchedules = schedules.filter((s) => isSameDay(s.startAt.toDate(), day));
+              const isToday = i === todayIndex;
+              return (
+                <div
+                  key={day.toISOString()}
+                  onClick={
+                    onSlotClick
+                      ? (e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const hour = startHour + Math.floor((e.clientY - rect.top) / HOUR_HEIGHT);
+                          onSlotClick(day, hour);
+                        }
+                      : undefined
+                  }
+                  className={`relative border-l border-ink/[0.06] ${onSlotClick ? "cursor-pointer hover:bg-brand-50/40" : ""}`}
+                  style={{
+                    height: gridHeight,
+                    background: isToday
+                      ? "rgba(50,138,120,0.04)"
+                      : `repeating-linear-gradient(to bottom, transparent 0 ${HOUR_HEIGHT - 1}px, rgba(22,24,29,0.05) ${HOUR_HEIGHT - 1}px ${HOUR_HEIGHT}px)`,
+                  }}
+                >
+                  {daySchedules.map((schedule) => {
+                    const start = schedule.startAt.toDate();
+                    const end = schedule.endAt.toDate();
+                    const top = ((start.getHours() - startHour) * 60 + start.getMinutes()) * (HOUR_HEIGHT / 60) + 2;
+                    const height = Math.max(((end.getTime() - start.getTime()) / 60_000) * (HOUR_HEIGHT / 60) - 4, 30);
+                    const full = schedule.bookedCount >= schedule.capacity;
+                    const past = end.getTime() < now.getTime();
+                    const classType = classTypes[schedule.classTypeId];
+                    const colors = LEVEL_COLORS[classType?.level ?? "basico"];
+                    const instructor = instructors[schedule.instructorId];
+
+                    return (
+                      <button
+                        key={schedule.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onScheduleClick?.(schedule);
+                        }}
+                        title={`${classType?.name ?? "Clase"} · ${formatTime(start)} · ${instructor?.name ?? ""} · ${schedule.bookedCount}/${schedule.capacity}`}
+                        className="absolute inset-x-1 box-border flex flex-col items-start gap-px overflow-hidden rounded-[10px] px-2 py-[5px] text-left hover:brightness-[0.97]"
+                        style={{
+                          top,
+                          height,
+                          background: colors.blockBg,
+                          color: colors.blockFg,
+                          border: full ? "1.5px solid rgba(22,24,29,0.55)" : 0,
+                          opacity: past ? 0.55 : 1,
+                        }}
+                      >
+                        <span className="max-w-full truncate text-xs font-semibold leading-[15px]">
+                          {(classType?.name ?? "Clase").replace(/^Reformer /, "")}
+                        </span>
+                        <span className="max-w-full truncate text-[11px] leading-[14px] tabular-nums opacity-85">
+                          {formatTime(start)} · {capacityLabel(schedule)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+
+            {showNowLine && (
+              <div
+                className="pointer-events-none absolute h-0 border-t-2 border-brand-700"
+                style={{
+                  top: nowOffset,
+                  left: `calc(${GUTTER}px + (100% - ${GUTTER}px) * ${todayIndex} / 7)`,
+                  width: `calc((100% - ${GUTTER}px) / 7)`,
+                }}
+              />
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="flex gap-4 border-t border-gray-200 p-3 text-xs text-gray-500">
+      <div className="flex flex-wrap gap-4 text-xs text-ink-soft">
+        {usedLevels.map((level) => (
+          <span key={level} className="flex items-center gap-1.5">
+            <span
+              className="h-3 w-3 rounded"
+              style={{ background: LEVEL_COLORS[level].blockBg, border: `1px solid ${LEVEL_COLORS[level].blockFg}33` }}
+            />
+            {LEVEL_LABELS[level]}
+          </span>
+        ))}
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-green-500" /> Con lugares
+          <span className="h-3 w-3 rounded border-[1.5px] border-ink/55" /> Llena
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-red-500" /> Llena
-        </span>
+        {onSlotClick && <span className="text-ink-faint">Haz clic en un espacio vacío para programar ahí.</span>}
       </div>
     </div>
   );

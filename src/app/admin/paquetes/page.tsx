@@ -1,159 +1,129 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import {
-  addDoc,
-  collection,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  updateDoc,
-} from "firebase/firestore";
-import { Pencil, Ticket } from "lucide-react";
+import { addDoc, collection, doc, onSnapshot, orderBy, query, updateDoc } from "firebase/firestore";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
+import { formatMoney } from "@/lib/admin/data";
 import type { PackageDoc } from "@/lib/types/firestore";
-import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { FormField, inputClass } from "@/components/ui/FormField";
+import { chipClass, sheetInputClass } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { useToast } from "@/components/admin/Toast";
+import { AddTile, PrimaryAction, SheetFooter, Switch, Tag, fieldLabelClass } from "@/components/admin/ui";
 
 interface PackageItem extends PackageDoc {
   id: string;
 }
 
+const VALIDITY_OPTIONS = [7, 30, 45, 60, 90];
+
 export default function PaquetesPage() {
   const { tenantId } = useTenant();
+  const toast = useToast();
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   // `undefined` = closed, `null` = creating, a package = editing it.
-  const [dialog, setDialog] = useState<PackageItem | null | undefined>(
-    undefined,
-  );
+  const [dialog, setDialog] = useState<PackageItem | null | undefined>(undefined);
   const closeDialog = useCallback(() => setDialog(undefined), []);
 
   useEffect(() => {
-    const packagesQuery = query(
-      collection(db, "tenants", tenantId, "packages"),
-      orderBy("name"),
-    );
+    const packagesQuery = query(collection(db, "tenants", tenantId, "packages"), orderBy("name"));
     return onSnapshot(packagesQuery, (snapshot) => {
-      setPackages(
-        snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as PackageDoc),
-        })),
-      );
+      setPackages(snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as PackageDoc) })));
       setLoaded(true);
     });
   }, [tenantId]);
 
+  async function toggleVisible(pkg: PackageItem) {
+    const active = pkg.active === false;
+    await updateDoc(doc(db, "tenants", tenantId, "packages", pkg.id), { active });
+    toast(active ? `${pkg.name} visible en la app` : `${pkg.name} oculto en la app`);
+  }
+
   return (
     <div>
       <PageHeader
-        title="Paquetes de créditos"
-        description="Lo que tus alumnos compran para tomar clases. Cada clase le cuesta a un alumno una cantidad de créditos (normalmente 1), y el paquete deja de usarse al vencer su vigencia."
-        action={
-          <Button onClick={() => setDialog(null)}>+ Agregar paquete</Button>
-        }
+        title="Paquetes"
+        description="Lo que tus alumnos compran para reservar. Cada clase cuesta sus créditos y el paquete vence al terminar su vigencia."
+        action={<PrimaryAction onClick={() => setDialog(null)}>Nuevo paquete</PrimaryAction>}
       />
 
-      {dialog !== undefined && (
-        <Modal
-          title={dialog ? "Editar paquete" : "Nuevo paquete"}
-          onClose={closeDialog}
-        >
-          <PackageForm
-            tenantId={tenantId}
-            pkg={dialog ?? undefined}
-            onDone={closeDialog}
-          />
-        </Modal>
-      )}
-
-      {loaded && packages.length === 0 ? (
-        <EmptyState
-          icon={<Ticket className="h-7 w-7" strokeWidth={1.75} />}
-          title="Todavía no tienes paquetes"
-          description="Crea al menos un paquete (ej. 10 clases por $2,000) para que tus alumnos puedan comprar créditos y reservar."
-          action={
-            <Button onClick={() => setDialog(null)}>
-              + Agregar mi primer paquete
-            </Button>
-          }
-        />
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {packages.map((pkg) => (
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
+        {packages.map((pkg) => {
+          const visible = pkg.active !== false;
+          return (
             <div
               key={pkg.id}
-              className="group flex flex-col rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-md"
+              className={`flex flex-col gap-3.5 rounded-[22px] border border-ink/[0.08] bg-white p-5 ${visible ? "" : "opacity-60"}`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <p className="font-medium text-gray-900">{pkg.name}</p>
-                <button
-                  onClick={() => setDialog(pkg)}
-                  aria-label={`Editar ${pkg.name}`}
-                  className="-mr-2 -mt-1 rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-              </div>
-              <p className="mt-1 text-2xl font-bold text-gray-900">
-                ${pkg.price.toLocaleString("es-MX")}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600">
-                <span className="rounded-full bg-gray-100 px-2.5 py-1">
-                  {pkg.creditAmount} créditos
+              <button onClick={() => setDialog(pkg)} className="flex flex-col gap-3 text-left text-ink">
+                <span className="text-[15px] font-bold">{pkg.name}</span>
+                <span className="font-display text-[38px] font-semibold leading-none tracking-[-0.02em]">
+                  {formatMoney(pkg.price)}
                 </span>
-                <span className="rounded-full bg-gray-100 px-2.5 py-1">
-                  Vigencia {pkg.validityDays} días
+                <div className="flex flex-wrap gap-1.5">
+                  <Tag>
+                    {pkg.creditAmount} {pkg.creditAmount === 1 ? "crédito" : "créditos"}
+                  </Tag>
+                  <Tag>{pkg.validityDays} días</Tag>
+                </div>
+                <span className="text-[13px] text-ink-soft">
+                  {pkg.creditAmount > 1
+                    ? `${formatMoney(Math.round(pkg.price / pkg.creditAmount))} por clase`
+                    : "Precio por clase"}
                 </span>
+              </button>
+              <div className="mt-auto flex items-center justify-between gap-2.5 border-t border-ink/[0.06] pt-3">
+                <span className="text-[13px] font-semibold text-ink">
+                  {visible ? "Visible en la app" : "Oculto en la app"}
+                </span>
+                <Switch checked={visible} onChange={() => toggleVisible(pkg)} label="Visible en la app" />
               </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
+        {loaded && (
+          <AddTile
+            label={packages.length === 0 ? "Crea tu primer paquete" : "Nuevo paquete"}
+            onClick={() => setDialog(null)}
+            className="min-h-[220px]"
+          />
+        )}
+      </div>
+
+      {dialog !== undefined && (
+        <PackageSheet tenantId={tenantId} pkg={dialog ?? undefined} onDone={closeDialog} />
       )}
     </div>
   );
 }
 
-function PackageForm({
-  tenantId,
-  pkg,
-  onDone,
-}: {
-  tenantId: string;
-  pkg?: PackageItem;
-  onDone: () => void;
-}) {
+function PackageSheet({ tenantId, pkg, onDone }: { tenantId: string; pkg?: PackageItem; onDone: () => void }) {
+  const toast = useToast();
   const [name, setName] = useState(pkg?.name ?? "");
   const [creditAmount, setCreditAmount] = useState(pkg?.creditAmount ?? 10);
   const [price, setPrice] = useState<number | "">(pkg?.price ?? "");
   const [validityDays, setValidityDays] = useState(pkg?.validityDays ?? 45);
   const [submitting, setSubmitting] = useState(false);
 
+  const validityOptions = VALIDITY_OPTIONS.includes(validityDays)
+    ? VALIDITY_OPTIONS
+    : [...VALIDITY_OPTIONS, validityDays].sort((a, b) => a - b);
+  const priceValue = price === "" ? 0 : price;
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setSubmitting(true);
     try {
-      const data = {
-        name,
-        creditAmount,
-        price: price === "" ? 0 : price,
-        validityDays,
-      };
+      const data = { name: name.trim(), creditAmount, price: priceValue, validityDays };
       if (pkg) {
         await updateDoc(doc(db, "tenants", tenantId, "packages", pkg.id), data);
       } else {
-        await addDoc(collection(db, "tenants", tenantId, "packages"), {
-          ...data,
-          active: true,
-        });
+        await addDoc(collection(db, "tenants", tenantId, "packages"), { ...data, active: true });
       }
+      toast(pkg ? "Paquete actualizado" : "Paquete creado");
       onDone();
     } finally {
       setSubmitting(false);
@@ -161,96 +131,93 @@ function PackageForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <FormField
-        label="Nombre del paquete"
-        htmlFor="package-name"
-        hint="Como lo verán tus alumnos en la app al momento de comprar"
-        required
-      >
-        <input
-          id="package-name"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Pack 10 Clases Reformer"
-          className={inputClass}
+    <Modal
+      title={pkg ? "Editar paquete" : "Nuevo paquete"}
+      subtitle="Así lo verán tus alumnos al comprar"
+      onClose={onDone}
+      footer={
+        <SheetFooter
+          formId="package-form"
+          onCancel={onDone}
+          submitting={submitting}
+          label={pkg ? "Guardar cambios" : "Crear paquete"}
         />
-      </FormField>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField
-          label="Créditos incluidos"
-          htmlFor="package-credits"
-          hint="1 clase = 1 crédito, normalmente"
-          required
-        >
+      }
+    >
+      <form id="package-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <label className={fieldLabelClass}>
+          Nombre del paquete
           <input
-            id="package-credits"
-            type="number"
-            min={1}
             required
-            value={creditAmount}
-            onChange={(e) => setCreditAmount(Number(e.target.value))}
-            className={inputClass}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Pack 10 clases"
+            className={sheetInputClass}
           />
-        </FormField>
+        </label>
 
-        <FormField
-          label="Precio"
-          htmlFor="package-price"
-          hint="En tu moneda local, sin símbolo"
-          required
-        >
-          <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-500">
-              $
-            </span>
-            <input
-              id="package-price"
-              type="number"
-              min={0}
-              required
-              value={price}
-              onChange={(e) =>
-                setPrice(e.target.value === "" ? "" : Number(e.target.value))
-              }
-              placeholder="2000"
-              className={`${inputClass} pl-7`}
-            />
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className={fieldLabelClass}>
+            Créditos
+            <div className="flex h-12 items-center justify-between rounded-xl bg-[#F3F2EE] p-1">
+              <button
+                type="button"
+                onClick={() => setCreditAmount((n) => Math.max(1, n - 1))}
+                aria-label="Menos créditos"
+                className="h-10 w-10 rounded-[10px] bg-white text-lg font-semibold"
+              >
+                −
+              </button>
+              <span className="text-[15px] font-bold tabular-nums">{creditAmount}</span>
+              <button
+                type="button"
+                onClick={() => setCreditAmount((n) => Math.min(200, n + 1))}
+                aria-label="Más créditos"
+                className="h-10 w-10 rounded-[10px] bg-white text-lg font-semibold"
+              >
+                +
+              </button>
+            </div>
           </div>
-        </FormField>
+          <label className={fieldLabelClass}>
+            Precio
+            <span className="flex h-12 items-center overflow-hidden rounded-xl border border-ink/[0.14] bg-white focus-within:border-brand-600">
+              <span className="pl-3.5 pr-1 font-semibold text-ink-faint">$</span>
+              <input
+                type="number"
+                min={0}
+                required
+                value={price}
+                onChange={(e) => setPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="1800"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent text-[15px] font-semibold text-ink outline-none focus-visible:outline-none"
+              />
+            </span>
+          </label>
+        </div>
 
-        <FormField
-          label="Vigencia (días)"
-          htmlFor="package-validity"
-          hint="Días desde la compra antes de que expire"
-          required
-        >
-          <input
-            id="package-validity"
-            type="number"
-            min={1}
-            required
-            value={validityDays}
-            onChange={(e) => setValidityDays(Number(e.target.value))}
-            className={inputClass}
-          />
-        </FormField>
-      </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-[13px] font-semibold text-ink">Vigencia desde la compra</span>
+          <div className="flex flex-wrap gap-2">
+            {validityOptions.map((days) => (
+              <button
+                key={days}
+                type="button"
+                onClick={() => setValidityDays(days)}
+                className={chipClass(validityDays === days)}
+              >
+                {days} días
+              </button>
+            ))}
+          </div>
+        </div>
 
-      <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
-        <Button type="button" variant="secondary" onClick={onDone}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={submitting}>
-          {submitting
-            ? "Guardando..."
-            : pkg
-              ? "Guardar cambios"
-              : "Guardar paquete"}
-        </Button>
-      </div>
-    </form>
+        <p className="rounded-2xl bg-brand-50 p-3.5 text-sm font-semibold text-brand-800">
+          {creditAmount} {creditAmount === 1 ? "clase" : "clases"} por {formatMoney(priceValue)} ·{" "}
+          {formatMoney(Math.round(priceValue / creditAmount))} por clase · vence en {validityDays} días
+        </p>
+      </form>
+    </Modal>
   );
 }
+

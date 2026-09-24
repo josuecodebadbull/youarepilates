@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import {
   addDoc,
   arrayRemove,
@@ -14,34 +14,34 @@ import {
   query,
   updateDoc,
 } from "firebase/firestore";
-import { ArrowLeft, BedDouble, Pencil } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import { buildSpotsFromRowSizes, groupSpotsByRow, rowSizesFromSpots } from "@/lib/roomLayout";
 import type { BranchDoc, RoomDoc } from "@/lib/types/firestore";
+import { sheetInputClass } from "@/components/ui/FormField";
+import { Modal } from "@/components/ui/Modal";
+import { pageTitleClass } from "@/components/ui/PageHeader";
+import { PilatesBedIcon } from "@/components/ui/PilatesBedIcon";
 import { GalleryUploader } from "@/components/admin/GalleryUploader";
 import { RoomLayoutEditor } from "@/components/admin/RoomLayoutEditor";
-import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { FormField, inputClass } from "@/components/ui/FormField";
-import { Modal } from "@/components/ui/Modal";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { PilatesBedIcon } from "@/components/ui/PilatesBedIcon";
+import { useToast } from "@/components/admin/Toast";
+import { SheetFooter, cardClass, fieldLabelClass, textareaClass } from "@/components/admin/ui";
 
 interface Room extends RoomDoc {
   id: string;
 }
 
 export default function SedeDetailPage() {
-  const { tenantId } = useTenant();
+  const { tenantId, tenant } = useTenant();
   const { branchId } = useParams<{ branchId: string }>();
 
   const [branch, setBranch] = useState<BranchDoc | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  // `undefined` = closed, `null` = creating, a room = editing it.
+  const [roomDialog, setRoomDialog] = useState<Room | null | undefined>(undefined);
 
   useEffect(() => {
     return onSnapshot(doc(db, "tenants", tenantId, "branches", branchId), (snap) => {
@@ -50,10 +50,7 @@ export default function SedeDetailPage() {
   }, [tenantId, branchId]);
 
   useEffect(() => {
-    const roomsQuery = query(
-      collection(db, "tenants", tenantId, "branches", branchId, "rooms"),
-      orderBy("name"),
-    );
+    const roomsQuery = query(collection(db, "tenants", tenantId, "branches", branchId, "rooms"), orderBy("name"));
     return onSnapshot(roomsQuery, (snapshot) => {
       setRooms(snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as RoomDoc) })));
       setLoaded(true);
@@ -61,62 +58,64 @@ export default function SedeDetailPage() {
   }, [tenantId, branchId]);
 
   return (
-    <div>
+    <div className="flex flex-col gap-[18px]">
       <Link
         href="/admin/sedes"
-        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
+        className="flex h-9 items-center gap-1 self-start rounded-[10px] pl-1.5 pr-3 text-sm font-semibold text-ink-soft hover:bg-[#F3F2EE] hover:text-ink"
       >
-        <ArrowLeft className="h-4 w-4" strokeWidth={2} /> Sedes
+        <ChevronLeft className="h-[18px] w-[18px]" strokeWidth={2} /> Sedes
       </Link>
 
-      <PageHeader
-        title={branch?.name ?? "Sede"}
-        description={
-          branch
-            ? `${branch.address} — administra las salas y camas de reformer de esta sede.`
-            : undefined
-        }
-        action={<Button onClick={() => setFormOpen(true)}>+ Agregar sala</Button>}
-      />
+      <div className="flex flex-col gap-1">
+        <h1 className={pageTitleClass}>{branch?.name ?? "Sede"}</h1>
+        {branch && <p className="text-sm text-ink-soft">{branch.address}</p>}
+      </div>
 
-      {branch && <BranchInfoForm tenantId={tenantId} branchId={branchId} branch={branch} />}
-
-      {formOpen && (
-        <Modal title="Nueva sala" onClose={() => setFormOpen(false)}>
-          <RoomForm tenantId={tenantId} branchId={branchId} onDone={() => setFormOpen(false)} />
-        </Modal>
-      )}
-
-      {editingRoom && (
-        <Modal title="Editar sala" onClose={() => setEditingRoom(null)}>
-          <RoomEditForm
-            tenantId={tenantId}
-            branchId={branchId}
-            room={editingRoom}
-            onDone={() => setEditingRoom(null)}
-          />
-        </Modal>
-      )}
-
-      {loaded && rooms.length === 0 ? (
-        <EmptyState
-          icon={<BedDouble className="h-7 w-7" strokeWidth={1.75} />}
-          title="Todavía no tienes salas en esta sede"
-          description='Agrega una sala (ej. "Sala Reformer 1") y cuántas camas o lugares tiene, para poder programar horarios ahí.'
-          action={<Button onClick={() => setFormOpen(true)}>+ Agregar mi primera sala</Button>}
-        />
-      ) : (
-        <div className="space-y-4">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <section className="flex min-w-0 flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[22px] font-semibold text-ink">Salas</h2>
+            <button
+              onClick={() => setRoomDialog(null)}
+              className="h-10 rounded-xl border border-ink/[0.14] bg-white px-3.5 text-[13px] font-semibold text-ink hover:bg-[#F7F6F3]"
+            >
+              Agregar sala
+            </button>
+          </div>
+          {loaded && rooms.length === 0 && (
+            <div className="flex flex-col items-center gap-3 rounded-[22px] border-[1.5px] border-dashed border-ink/15 px-5 py-8 text-center">
+              <p className="text-[15px] font-semibold text-ink">Todavía no hay salas</p>
+              <p className="max-w-sm text-sm text-ink-soft">
+                Agrega una sala y cuántas camas tiene para poder programar clases aquí.
+              </p>
+              <button
+                onClick={() => setRoomDialog(null)}
+                className="h-11 rounded-xl bg-ink px-[18px] text-sm font-semibold text-white"
+              >
+                Agregar mi primera sala
+              </button>
+            </div>
+          )}
           {rooms.map((room) => (
-            <RoomCard
-              key={room.id}
-              tenantId={tenantId}
-              branchId={branchId}
-              room={room}
-              onEdit={() => setEditingRoom(room)}
-            />
+            <RoomCard key={room.id} tenantId={tenantId} branchId={branchId} room={room} onEdit={() => setRoomDialog(room)} />
           ))}
-        </div>
+        </section>
+
+        {branch && (
+          <section className="flex min-w-0 flex-col gap-3">
+            <h2 className="text-[22px] font-semibold text-ink">Info para alumnos</h2>
+            <BranchInfoForm tenantId={tenantId} branchId={branchId} branch={branch} slug={tenant.slug} />
+          </section>
+        )}
+      </div>
+
+      {roomDialog !== undefined && (
+        <RoomSheet
+          tenantId={tenantId}
+          branchId={branchId}
+          room={roomDialog ?? undefined}
+          onDone={() => setRoomDialog(undefined)}
+        />
       )}
     </div>
   );
@@ -126,121 +125,80 @@ function BranchInfoForm({
   tenantId,
   branchId,
   branch,
+  slug,
 }: {
   tenantId: string;
   branchId: string;
   branch: BranchDoc;
+  slug: string;
 }) {
+  const toast = useToast();
   const [phone, setPhone] = useState(branch.phone ?? "");
   const [arrivalNote, setArrivalNote] = useState(branch.arrivalNote ?? "");
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+
+  const dirty = phone !== (branch.phone ?? "") || arrivalNote !== (branch.arrivalNote ?? "");
 
   async function handleSave() {
+    if (!dirty) return;
     setSaving(true);
-    setSaved(false);
     try {
-      await updateDoc(doc(db, "tenants", tenantId, "branches", branchId), {
-        phone,
-        arrivalNote,
-      });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+      await updateDoc(doc(db, "tenants", tenantId, "branches", branchId), { phone, arrivalNote });
+      toast("Información de la sede guardada");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="mb-6 max-w-2xl space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-5">
-      <h2 className="font-semibold text-gray-900">Información para tus alumnos</h2>
-      <p className="text-sm text-gray-500">
-        Se muestra en la sección &ldquo;Estudio&rdquo; de la app, junto con la dirección
-        y el mapa de esta sede, para que sepan cómo llegar a su clase.
-      </p>
-
-      <FormField
-        label="Galería de fotos"
-        htmlFor="branch-gallery"
-        hint="Opcional — se muestran como una galería en la app de tus alumnos"
-      >
+    <div className={`flex flex-col gap-4 p-5 ${cardClass}`}>
+      <div className="flex flex-col gap-2">
+        <span className="text-[13px] font-semibold text-ink">Galería</span>
         <GalleryUploader tenantId={tenantId} branchId={branchId} photoUrls={branch.photoUrls ?? []} />
-      </FormField>
-
-      <FormField label="Teléfono de la sede" htmlFor="branch-phone" hint="Opcional — con lada">
+      </div>
+      <label className={fieldLabelClass}>
+        Teléfono
         <input
-          id="branch-phone"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="55 1234 5678"
-          className={inputClass}
+          className={`${sheetInputClass} h-[46px]`}
         />
-      </FormField>
-
-      <FormField
-        label="Cómo llegar / qué llevar"
-        htmlFor="branch-arrival"
-        hint='Estacionamiento, referencias, qué traer a clase — ej. "Estacionamiento gratuito en el sótano, entra por la puerta lateral"'
-      >
+      </label>
+      <label className={fieldLabelClass}>
+        Cómo llegar / qué llevar
         <textarea
-          id="branch-arrival"
           rows={3}
           value={arrivalNote}
           onChange={(e) => setArrivalNote(e.target.value)}
-          className={inputClass}
+          placeholder="Estacionamiento, referencias, qué traer a clase…"
+          className={textareaClass}
         />
-      </FormField>
-
-      <div className="flex items-center gap-3">
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Guardando..." : "Guardar información"}
-        </Button>
-        {saved && <span className="text-sm text-green-600">¡Guardado!</span>}
+      </label>
+      <div className="flex items-center gap-2.5">
+        <button
+          onClick={handleSave}
+          disabled={!dirty || saving}
+          className={`h-11 rounded-xl px-[18px] text-sm font-semibold ${
+            dirty ? "bg-ink text-white" : "cursor-default bg-[#E7E5E0] text-ink-faint"
+          }`}
+        >
+          {saving ? "Guardando..." : "Guardar"}
+        </button>
+        <a
+          href={`/s/${slug}/estudio`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[13px] font-semibold text-brand-700 hover:text-brand-800"
+        >
+          Ver en la app
+        </a>
       </div>
     </div>
   );
 }
 
-function RoomForm({
-  tenantId,
-  branchId,
-  onDone,
-}: {
-  tenantId: string;
-  branchId: string;
-  onDone: () => void;
-}) {
-  const [submitting, setSubmitting] = useState(false);
-
-  async function handleSubmit(name: string, rowSizes: number[]) {
-    setSubmitting(true);
-    try {
-      const spots = buildSpotsFromRowSizes(rowSizes);
-      await addDoc(collection(db, "tenants", tenantId, "branches", branchId, "rooms"), {
-        name,
-        capacity: spots.length,
-        spots,
-        blockedSpots: [],
-      } satisfies RoomDoc);
-      onDone();
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <RoomLayoutEditor
-      initialName=""
-      initialRowSizes={[4]}
-      submitLabel="Guardar sala"
-      submitting={submitting}
-      onSubmit={handleSubmit}
-      onCancel={onDone}
-    />
-  );
-}
-
-function RoomEditForm({
+function RoomSheet({
   tenantId,
   branchId,
   room,
@@ -248,24 +206,33 @@ function RoomEditForm({
 }: {
   tenantId: string;
   branchId: string;
-  room: Room;
+  room?: Room;
   onDone: () => void;
 }) {
+  const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(name: string, rowSizes: number[]) {
     setSubmitting(true);
     try {
       const spots = buildSpotsFromRowSizes(rowSizes);
-      const validSpotNumbers = new Set(spots.map((s) => s.spotNumber));
-      const blockedSpots = room.blockedSpots.filter((n) => validSpotNumbers.has(n));
-
-      await updateDoc(doc(db, "tenants", tenantId, "branches", branchId, "rooms", room.id), {
-        name,
-        capacity: spots.length,
-        spots,
-        blockedSpots,
-      });
+      if (room) {
+        const validSpotNumbers = new Set(spots.map((s) => s.spotNumber));
+        await updateDoc(doc(db, "tenants", tenantId, "branches", branchId, "rooms", room.id), {
+          name,
+          capacity: spots.length,
+          spots,
+          blockedSpots: room.blockedSpots.filter((n) => validSpotNumbers.has(n)),
+        });
+      } else {
+        await addDoc(collection(db, "tenants", tenantId, "branches", branchId, "rooms"), {
+          name,
+          capacity: spots.length,
+          spots,
+          blockedSpots: [],
+        } satisfies RoomDoc);
+      }
+      toast(room ? "Sala actualizada" : "Sala creada");
       onDone();
     } finally {
       setSubmitting(false);
@@ -273,14 +240,26 @@ function RoomEditForm({
   }
 
   return (
-    <RoomLayoutEditor
-      initialName={room.name}
-      initialRowSizes={rowSizesFromSpots(room.spots)}
-      submitLabel="Guardar cambios"
-      submitting={submitting}
-      onSubmit={handleSubmit}
-      onCancel={onDone}
-    />
+    <Modal
+      title={room ? "Editar sala" : "Nueva sala"}
+      subtitle="Acomoda las camas como están en tu sala"
+      onClose={onDone}
+      footer={
+        <SheetFooter
+          formId="room-form"
+          onCancel={onDone}
+          submitting={submitting}
+          label={room ? "Guardar cambios" : "Crear sala"}
+        />
+      }
+    >
+      <RoomLayoutEditor
+        formId="room-form"
+        initialName={room?.name ?? ""}
+        initialRowSizes={room ? rowSizesFromSpots(room.spots) : [4]}
+        onSubmit={handleSubmit}
+      />
+    </Modal>
   );
 }
 
@@ -295,6 +274,7 @@ function RoomCard({
   room: Room;
   onEdit: () => void;
 }) {
+  const toast = useToast();
   const availableCount = room.capacity - room.blockedSpots.length;
   const rows = groupSpotsByRow(room.spots);
 
@@ -304,30 +284,30 @@ function RoomCard({
     await updateDoc(roomRef, {
       blockedSpots: isBlocked ? arrayRemove(spotNumber) : arrayUnion(spotNumber),
     });
+    toast(isBlocked ? `Cama ${spotNumber} disponible de nuevo` : `Cama ${spotNumber} en mantenimiento`);
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 p-5">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="font-medium text-gray-900">{room.name}</p>
-        <div className="flex shrink-0 items-center gap-3">
-          <p className="text-sm text-gray-500">
-            {availableCount}/{room.capacity} disponibles
-          </p>
-          <button
-            onClick={onEdit}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-soft hover:bg-gray-100 hover:text-ink"
-          >
-            <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} /> Editar
-          </button>
+    <div className={`flex flex-col gap-4 p-5 ${cardClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-base font-bold text-ink">{room.name}</span>
+          <span className="text-[13px] text-ink-soft">
+            {availableCount} de {room.capacity} camas disponibles
+          </span>
         </div>
+        <button
+          onClick={onEdit}
+          className="h-9 rounded-[10px] bg-[#F3F2EE] px-3 text-[13px] font-semibold text-ink hover:bg-[#EAE8E3]"
+        >
+          Editar
+        </button>
       </div>
-      <p className="mt-1 text-xs text-gray-500">
-        Haz clic en una cama para bloquearla por mantenimiento sin afectar el resto del cupo.
-      </p>
-      <div className="mt-3 space-y-2">
+
+      <div className="flex flex-col items-center gap-3.5 rounded-2xl bg-canvas px-3 py-[18px]">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Frente · espejo</span>
         {rows.map((rowSpots, rowIndex) => (
-          <div key={rowIndex} className="flex flex-wrap gap-1.5">
+          <div key={rowIndex} className="flex flex-wrap justify-center gap-2.5">
             {rowSpots.map((spot) => {
               const blocked = room.blockedSpots.includes(spot.spotNumber);
               return (
@@ -335,14 +315,16 @@ function RoomCard({
                   key={spot.spotNumber}
                   type="button"
                   onClick={() => toggleSpot(spot.spotNumber)}
-                  title={blocked ? `${spot.label} — bloqueada por mantenimiento` : spot.label}
-                  className={`relative flex h-11 w-7 items-center justify-center transition-colors ${
-                    blocked ? "text-amber-500" : "text-gray-400 hover:text-gray-600"
+                  title={blocked ? `${spot.label} — en mantenimiento` : `${spot.label} — disponible`}
+                  className={`relative flex h-[76px] w-14 items-center justify-center rounded-[14px] shadow-[0_1px_2px_rgba(22,24,29,0.06)] ${
+                    blocked ? "bg-amber-100 text-amber-600" : "bg-white text-brand-500"
                   }`}
                 >
-                  <PilatesBedIcon className="h-full w-full" />
+                  <PilatesBedIcon className="h-[60px] w-9" filled />
                   <span
-                    className={`absolute text-[10px] font-semibold ${blocked ? "text-amber-700 line-through" : "text-gray-700"}`}
+                    className={`absolute text-[13px] font-bold ${
+                      blocked ? "text-amber-800 line-through" : "text-brand-800"
+                    }`}
                   >
                     {spot.spotNumber}
                   </span>
@@ -351,6 +333,18 @@ function RoomCard({
             })}
           </div>
         ))}
+      </div>
+
+      <div className="flex flex-wrap gap-3.5 text-xs text-ink-soft">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-[3px] bg-brand-500" />
+          Disponible
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-[3px] bg-amber-600" />
+          En mantenimiento
+        </span>
+        <span>Toca una cama para bloquearla sin cambiar el cupo total.</span>
       </div>
     </div>
   );

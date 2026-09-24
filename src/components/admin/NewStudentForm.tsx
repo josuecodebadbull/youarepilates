@@ -5,7 +5,7 @@ import { httpsCallable } from "firebase/functions";
 
 import { functions } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/Button";
-import { FormField, inputClass } from "@/components/ui/FormField";
+import { sheetInputClass } from "@/components/ui/FormField";
 
 export interface CreatedStudent {
   id: string;
@@ -52,48 +52,52 @@ export function NewStudentForm({
     }
   }
 
+  const labelClass = "flex flex-col gap-1.5 text-[13px] font-semibold text-ink";
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <FormField label="Nombre completo" htmlFor="new-student-name" required>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+      <label className={labelClass}>
+        Nombre completo
         <input
-          id="new-student-name"
           required
           autoFocus
+          placeholder="Ej. Valeria Gómez"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          className={inputClass}
+          className={sheetInputClass}
         />
-      </FormField>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField label="Teléfono" htmlFor="new-student-phone" hint="Opcional">
-          <input
-            id="new-student-phone"
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className={inputClass}
-          />
-        </FormField>
-        <FormField label="Correo" htmlFor="new-student-email" hint="Opcional">
-          <input
-            id="new-student-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className={inputClass}
-          />
-        </FormField>
-      </div>
-      <p className="text-xs text-ink-soft">
-        El alumno no necesita cuenta: puedes inscribirlo y venderle créditos desde aquí. Si después
-        se registra en la app, vincula su cuenta desde su ficha para conservar su historial.
+      </label>
+      <label className={labelClass}>
+        Teléfono / WhatsApp
+        <input
+          type="tel"
+          placeholder="55 1234 5678"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className={sheetInputClass}
+        />
+      </label>
+      <label className={labelClass}>
+        <span>
+          Email <span className="font-normal text-ink-faint">(opcional)</span>
+        </span>
+        <input
+          type="email"
+          placeholder="correo@ejemplo.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className={sheetInputClass}
+        />
+      </label>
+      <p className="text-xs leading-normal text-ink-soft">
+        Se crea sin cuenta. Cuando se registre en la app podrás vincularla sin perder créditos.
       </p>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
-        <Button type="button" variant="secondary" onClick={onCancel}>
+      <div className="flex gap-2 pt-1">
+        <Button type="button" variant="secondary" className="h-12" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={submitting}>
+        <Button type="submit" variant="dark" className="h-12 flex-1" disabled={submitting}>
           {submitting ? "Creando..." : submitLabel}
         </Button>
       </div>

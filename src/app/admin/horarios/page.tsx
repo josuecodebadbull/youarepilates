@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Timestamp,
   collection,
@@ -12,19 +13,20 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 
 import { db } from "@/lib/firebase/client";
-import { getMonday } from "@/lib/calendarDate";
+import { addDays, getMonday, isSameDay } from "@/lib/calendarDate";
+import { formatShortDate } from "@/lib/admin/data";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import type { BranchDoc, ClassTypeDoc, InstructorDoc, RoomDoc, ScheduleDoc } from "@/lib/types/firestore";
-import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { FormField, inputClass } from "@/components/ui/FormField";
+import { chipClass, sheetInputClass } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ClassRosterModal } from "@/components/admin/ClassRosterModal";
-import { WeekCalendar } from "@/components/admin/WeekCalendar";
+import { ClassRow } from "@/components/admin/ClassRow";
+import { useToast } from "@/components/admin/Toast";
+import { DAY_LABELS, WeekCalendar } from "@/components/admin/WeekCalendar";
 
 interface Schedule extends ScheduleDoc {
   id: string;
@@ -48,6 +50,8 @@ interface SlotPrefill {
   time: string;
 }
 
+const DAY_NAMES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+
 function toDateInputValue(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -61,26 +65,36 @@ function toTimeInputValue(hour: number): string {
 }
 
 export default function HorariosPage() {
+  return (
+    <Suspense>
+      <HorariosContent />
+    </Suspense>
+  );
+}
+
+function HorariosContent() {
   const { tenantId } = useTenant();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [classTypes, setClassTypes] = useState<ClassType[]>([]);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
-  const [loaded, setLoaded] = useState(false);
   const [slotPrefill, setSlotPrefill] = useState<SlotPrefill | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-  const [view, setView] = useState<"calendar" | "list">("calendar");
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
+  const [selectedDay, setSelectedDay] = useState(() => new Date());
   const [weekSchedules, setWeekSchedules] = useState<Schedule[]>([]);
   const [rosterScheduleId, setRosterScheduleId] = useState<string | null>(null);
 
-  // The week grid needs real width to be usable — default to the list on phones
-  // instead of handing them a calendar that only works by scrolling sideways.
+  // "Programar clase" from the header / quick actions lands here with ?nuevo=1.
+  const wantsNew = searchParams.get("nuevo") === "1";
   useEffect(() => {
-    if (window.innerWidth < 768) {
-      setView("list");
-    }
-  }, []);
+    if (!wantsNew) return;
+    setSlotPrefill(null);
+    setFormOpen(true);
+    router.replace("/admin/horarios");
+  }, [wantsNew, router]);
 
   useEffect(() => {
     const schedulesQuery = query(
@@ -90,13 +104,11 @@ export default function HorariosPage() {
     );
     return onSnapshot(schedulesQuery, (snapshot) => {
       setSchedules(snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as ScheduleDoc) })));
-      setLoaded(true);
     });
   }, [tenantId]);
 
   useEffect(() => {
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
+    const weekEnd = addDays(weekStart, 7);
     const weekQuery = query(
       collection(db, "tenants", tenantId, "schedules"),
       where("status", "==", "scheduled"),
@@ -132,14 +144,8 @@ export default function HorariosPage() {
 
   const missingPrerequisite = branches.length === 0 || classTypes.length === 0 || instructors.length === 0;
 
-  const classTypesById = useMemo(
-    () => Object.fromEntries(classTypes.map((c) => [c.id, c])),
-    [classTypes],
-  );
-  const instructorsById = useMemo(
-    () => Object.fromEntries(instructors.map((i) => [i.id, i])),
-    [instructors],
-  );
+  const classTypesById = useMemo(() => Object.fromEntries(classTypes.map((c) => [c.id, c])), [classTypes]);
+  const instructorsById = useMemo(() => Object.fromEntries(instructors.map((i) => [i.id, i])), [instructors]);
 
   // Looked up live so the roster header (bookedCount) updates as bookings change.
   const rosterSchedule = rosterScheduleId
@@ -151,18 +157,51 @@ export default function HorariosPage() {
     setFormOpen(true);
   }
 
+  function goToWeek(start: Date) {
+    setWeekStart(start);
+    const today = new Date();
+    setSelectedDay(isSameDay(getMonday(today), start) ? today : start);
+  }
+
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const today = new Date();
+  const selectedIndex = days.findIndex((d) => isSameDay(d, selectedDay));
+  const selectedClasses = weekSchedules.filter((s) => isSameDay(s.startAt.toDate(), selectedDay));
+  const weekEndDay = addDays(weekStart, 6);
+  const rangeLabel =
+    weekStart.getMonth() === weekEndDay.getMonth()
+      ? `${weekStart.getDate()} – ${formatShortDate(weekEndDay)}`
+      : `${formatShortDate(weekStart)} – ${formatShortDate(weekEndDay)}`;
+
+  const navButton =
+    "flex h-10 w-10 items-center justify-center rounded-xl border border-ink/[0.12] bg-white text-ink hover:bg-[#F7F6F3]";
+
   return (
-    <div>
+    <div className="flex flex-col">
       <PageHeader
         title="Horarios"
-        description="Las clases programadas de todas tus sedes, ordenadas por fecha. El cupo se actualiza en vivo conforme tus alumnos reservan."
+        description="Cupos en vivo conforme tus alumnos reservan."
         action={
-          !missingPrerequisite && <Button onClick={() => openForm(null)}>+ Programar clase</Button>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => goToWeek(addDays(weekStart, -7))} aria-label="Semana anterior" className={navButton}>
+              <ChevronLeft className="h-[18px] w-[18px]" strokeWidth={2} />
+            </button>
+            <span className="whitespace-nowrap px-2.5 text-sm font-semibold text-ink">{rangeLabel}</span>
+            <button onClick={() => goToWeek(addDays(weekStart, 7))} aria-label="Semana siguiente" className={navButton}>
+              <ChevronRight className="h-[18px] w-[18px]" strokeWidth={2} />
+            </button>
+            <button
+              onClick={() => goToWeek(getMonday(new Date()))}
+              className="h-10 rounded-xl border border-ink/[0.12] bg-white px-3.5 text-[13px] font-semibold text-ink hover:bg-[#F7F6F3]"
+            >
+              Hoy
+            </button>
+          </div>
         }
       />
 
       {missingPrerequisite && (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <div className="mb-5 rounded-[18px] bg-[#FEF7E6] p-4 text-sm text-amber-900">
           Antes de programar una clase necesitas al menos una{" "}
           {branches.length === 0 && (
             <Link href="/admin/sedes" className="font-semibold underline">
@@ -183,18 +222,109 @@ export default function HorariosPage() {
         </div>
       )}
 
+      {/* Phones and tablets: pick a day, see its classes as cards. */}
+      <div className="flex flex-col gap-4 pb-20 lg:hidden">
+        <div className="grid grid-cols-7 gap-1.5">
+          {days.map((day, i) => {
+            const selected = i === selectedIndex;
+            const isToday = isSameDay(day, today);
+            const hasClasses = weekSchedules.some((s) => isSameDay(s.startAt.toDate(), day));
+            return (
+              <button
+                key={day.toISOString()}
+                onClick={() => setSelectedDay(day)}
+                className={`flex h-[66px] flex-col items-center justify-center gap-0.5 rounded-2xl ${
+                  selected
+                    ? "bg-ink text-white"
+                    : `border border-ink/[0.08] bg-white ${isToday ? "text-brand-700" : "text-ink"}`
+                }`}
+              >
+                <span className="text-[11px] font-semibold opacity-75">{DAY_LABELS[i]}</span>
+                <span className="text-[17px] font-bold">{day.getDate()}</span>
+                <span
+                  className={`h-[5px] w-[5px] rounded-full ${
+                    hasClasses ? (selected ? "bg-brand-300" : "bg-brand-500") : "bg-transparent"
+                  }`}
+                />
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-baseline justify-between">
+          <span className="text-[15px] font-semibold text-ink">
+            {DAY_NAMES[selectedIndex >= 0 ? selectedIndex : 0]} {selectedDay.getDate()}
+            {isSameDay(selectedDay, today) ? " · Hoy" : ""}
+          </span>
+          <span className="text-[13px] text-ink-faint">
+            {selectedClasses.length} {selectedClasses.length === 1 ? "clase" : "clases"}
+          </span>
+        </div>
+
+        {selectedClasses.length > 0 ? (
+          <div className="flex flex-col gap-2.5">
+            {selectedClasses.map((schedule) => (
+              <ClassRow
+                key={schedule.id}
+                variant="card"
+                schedule={schedule}
+                classType={classTypesById[schedule.classTypeId]}
+                instructor={instructorsById[schedule.instructorId]}
+                onClick={() => setRosterScheduleId(schedule.id)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3 rounded-[22px] border-[1.5px] border-dashed border-ink/15 px-5 py-8 text-center">
+            <p className="text-[15px] font-semibold text-ink">Sin clases este día</p>
+            {!missingPrerequisite && (
+              <button
+                onClick={() => openForm({ date: toDateInputValue(selectedDay), time: "09:00" })}
+                className="h-11 rounded-xl bg-ink px-[18px] text-sm font-semibold text-white"
+              >
+                Programar clase
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: full week grid. */}
+      <div className="hidden lg:block">
+        <WeekCalendar
+          weekStart={weekStart}
+          schedules={weekSchedules}
+          classTypes={classTypesById}
+          instructors={instructorsById}
+          onScheduleClick={(schedule) => setRosterScheduleId(schedule.id)}
+          onSlotClick={
+            missingPrerequisite
+              ? undefined
+              : (day, hour) => openForm({ date: toDateInputValue(day), time: toTimeInputValue(hour) })
+          }
+        />
+      </div>
+
+      {!missingPrerequisite && !formOpen && !rosterSchedule && (
+        <button
+          onClick={() => openForm({ date: toDateInputValue(selectedDay), time: "09:00" })}
+          className="fixed bottom-[calc(92px+env(safe-area-inset-bottom))] right-4 z-20 flex h-[52px] items-center gap-2 rounded-full bg-ink px-5 text-[15px] font-semibold text-white shadow-[0_12px_28px_-8px_rgba(22,24,29,0.45)] lg:hidden"
+        >
+          <Plus className="h-[18px] w-[18px]" strokeWidth={2.2} />
+          Programar
+        </button>
+      )}
+
       {formOpen && (
-        <Modal title="Programar clase" onClose={() => setFormOpen(false)}>
-          <ScheduleForm
-            tenantId={tenantId}
-            branches={branches}
-            classTypes={classTypes}
-            instructors={instructors.filter((i) => i.active)}
-            existingSchedules={schedules}
-            prefill={slotPrefill}
-            onDone={() => setFormOpen(false)}
-          />
-        </Modal>
+        <ScheduleForm
+          tenantId={tenantId}
+          branches={branches}
+          classTypes={classTypes}
+          instructors={instructors.filter((i) => i.active)}
+          existingSchedules={schedules}
+          prefill={slotPrefill}
+          onDone={() => setFormOpen(false)}
+        />
       )}
 
       {rosterSchedule && (
@@ -207,112 +337,8 @@ export default function HorariosPage() {
           onClose={() => setRosterScheduleId(null)}
         />
       )}
-
-      {loaded && schedules.length === 0 && !missingPrerequisite ? (
-        <EmptyState
-          icon={<CalendarDays className="h-7 w-7" strokeWidth={1.75} />}
-          title="Todavía no hay clases programadas"
-          description="Programa tu primera clase para que tus alumnos puedan empezar a reservar."
-          action={<Button onClick={() => openForm(null)}>+ Programar mi primera clase</Button>}
-        />
-      ) : (
-        <>
-          <div className="mb-4 flex justify-end">
-            <div className="inline-flex rounded-md border border-gray-200 p-0.5 text-sm">
-              <button
-                onClick={() => setView("calendar")}
-                className={`rounded px-3 py-1 ${view === "calendar" ? "bg-brand-700 text-white" : "text-gray-600 hover:bg-gray-50"}`}
-              >
-                Calendario
-              </button>
-              <button
-                onClick={() => setView("list")}
-                className={`rounded px-3 py-1 ${view === "list" ? "bg-brand-700 text-white" : "text-gray-600 hover:bg-gray-50"}`}
-              >
-                Lista
-              </button>
-            </div>
-          </div>
-
-          {view === "calendar" ? (
-            <WeekCalendar
-              weekStart={weekStart}
-              schedules={weekSchedules}
-              classTypes={classTypesById}
-              instructors={instructorsById}
-              onPrevWeek={() => setWeekStart((d) => shiftDays(d, -7))}
-              onNextWeek={() => setWeekStart((d) => shiftDays(d, 7))}
-              onToday={() => setWeekStart(getMonday(new Date()))}
-              onScheduleClick={(schedule) => setRosterScheduleId(schedule.id)}
-              onSlotClick={
-                missingPrerequisite
-                  ? undefined
-                  : (day, hour) => openForm({ date: toDateInputValue(day), time: toTimeInputValue(hour) })
-              }
-            />
-          ) : (
-            <>
-              <div className="mb-4 flex gap-4 text-xs text-gray-500">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-green-500" /> Con lugares
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-red-500" /> Llena
-                </span>
-              </div>
-              <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200">
-                {schedules.map((schedule) => {
-                  const classType = classTypesById[schedule.classTypeId];
-                  const instructor = instructorsById[schedule.instructorId];
-                  return (
-                    <li
-                      key={schedule.id}
-                      onClick={() => setRosterScheduleId(schedule.id)}
-                      className="flex cursor-pointer items-center justify-between p-4 hover:bg-gray-50"
-                    >
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {classType?.name ?? "Clase"}
-                          {instructor && (
-                            <span className="font-normal text-gray-500"> · {instructor.name}</span>
-                          )}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {schedule.startAt.toDate().toLocaleString("es-MX", {
-                            weekday: "short",
-                            day: "numeric",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          schedule.bookedCount >= schedule.capacity
-                            ? "bg-red-100 text-red-700"
-                            : "bg-green-100 text-green-700"
-                        }`}
-                      >
-                        {schedule.bookedCount}/{schedule.capacity}
-                        {schedule.waitlistCount > 0 ? ` · ${schedule.waitlistCount} en espera` : ""}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
-        </>
-      )}
     </div>
   );
-}
-
-function shiftDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
 }
 
 function ScheduleForm({
@@ -332,6 +358,7 @@ function ScheduleForm({
   prefill: SlotPrefill | null;
   onDone: () => void;
 }) {
+  const toast = useToast();
   const [branchId, setBranchId] = useState(prefill?.branchId ?? branches[0]?.id ?? "");
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomId, setRoomId] = useState("");
@@ -344,6 +371,13 @@ function ScheduleForm({
   const [submitting, setSubmitting] = useState(false);
 
   const todayInputValue = useMemo(() => toDateInputValue(new Date()), []);
+
+  // Opened from ?nuevo=1 the lists may still be loading — pick defaults once they arrive.
+  useEffect(() => {
+    setBranchId((current) => current || branches[0]?.id || "");
+    setClassTypeId((current) => current || classTypes[0]?.id || "");
+    setInstructorId((current) => current || instructors[0]?.id || "");
+  }, [branches, classTypes, instructors]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -358,6 +392,7 @@ function ScheduleForm({
     );
   }, [tenantId, branchId]);
 
+  const selectedBranch = branches.find((b) => b.id === branchId);
   const selectedRoom = useMemo(() => rooms.find((r) => r.id === roomId), [rooms, roomId]);
   const selectedClassType = useMemo(
     () => classTypes.find((c) => c.id === classTypeId),
@@ -437,149 +472,173 @@ function ScheduleForm({
       }
 
       await batch.commit();
+      toast(repeatWeeks > 1 ? `${repeatWeeks} clases programadas` : "Clase programada");
       onDone();
     } finally {
       setSubmitting(false);
     }
   }
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField label="Sede" htmlFor="schedule-branch" required>
-          <select
-            id="schedule-branch"
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-            className={inputClass}
-          >
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </select>
-        </FormField>
+  const labelClass = "text-[13px] font-semibold text-ink";
 
-        <FormField
-          label="Sala"
-          htmlFor="schedule-room"
-          hint={
-            selectedRoom
-              ? `Capacidad disponible: ${effectiveCapacity} de ${selectedRoom.capacity}${
-                  selectedRoom.blockedSpots.length > 0
-                    ? ` (${selectedRoom.blockedSpots.length} en mantenimiento)`
-                    : ""
+  return (
+    <Modal
+      title="Programar clase"
+      subtitle="Tus alumnos la verán al instante en la app"
+      onClose={onDone}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onDone}
+            className="h-[50px] rounded-[14px] border border-ink/[0.14] bg-white px-[18px] text-[15px] font-semibold text-ink"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form="schedule-form"
+            disabled={submitting}
+            className="h-[50px] flex-1 rounded-[14px] bg-ink text-[15px] font-semibold text-white disabled:opacity-50"
+          >
+            {submitting ? "Guardando..." : repeatWeeks > 1 ? `Programar ${repeatWeeks} clases` : "Programar clase"}
+          </button>
+        </>
+      }
+    >
+      <form id="schedule-form" onSubmit={handleSubmit} className="flex flex-col gap-[18px]">
+        <div className="flex flex-col gap-2">
+          <span className={labelClass}>Tipo de clase</span>
+          <div className="flex flex-wrap gap-2">
+            {classTypes.map((classType) => (
+              <button
+                key={classType.id}
+                type="button"
+                onClick={() => setClassTypeId(classType.id)}
+                className={chipClass(classType.id === classTypeId)}
+              >
+                {classType.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className={labelClass}>Instructor</span>
+          <div className="flex flex-wrap gap-2">
+            {instructors.map((instructor) => (
+              <button
+                key={instructor.id}
+                type="button"
+                onClick={() => setInstructorId(instructor.id)}
+                className={chipClass(instructor.id === instructorId)}
+              >
+                {instructor.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          <label className={`flex flex-col gap-1.5 ${labelClass}`}>
+            Fecha
+            <input
+              type="date"
+              required
+              min={todayInputValue}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className={sheetInputClass}
+            />
+          </label>
+          <label className={`flex flex-col gap-1.5 ${labelClass}`}>
+            Hora
+            <input
+              type="time"
+              required
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              className={sheetInputClass}
+            />
+          </label>
+        </div>
+
+        {(branches.length > 1 || rooms.length > 1) && (
+          <div className="grid grid-cols-2 gap-2.5">
+            <label className={`flex flex-col gap-1.5 ${labelClass}`}>
+              Sede
+              <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className={sheetInputClass}>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={`flex flex-col gap-1.5 ${labelClass}`}>
+              Sala
+              <select
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value)}
+                disabled={rooms.length === 0}
+                className={sheetInputClass}
+              >
+                {rooms.map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {room.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1 rounded-2xl bg-[#F3F2EE] p-3.5">
+          <span className="text-sm font-semibold text-ink">
+            {selectedBranch?.name ?? "Sede"}
+            {selectedRoom ? ` · ${selectedRoom.name}` : ""}
+          </span>
+          <span className="text-[13px] text-ink-soft">
+            {selectedRoom
+              ? `${effectiveCapacity} de ${selectedRoom.capacity} camas disponibles${
+                  selectedRoom.blockedSpots.length > 0 ? ` (${selectedRoom.blockedSpots.length} en mantenimiento)` : ""
                 }`
               : rooms.length === 0
                 ? "Esta sede no tiene salas — créala primero"
-                : undefined
-          }
-          required
-        >
-          <select
-            id="schedule-room"
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
-            disabled={rooms.length === 0}
-            className={inputClass}
-          >
-            {rooms.map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.name}
-              </option>
-            ))}
-          </select>
-        </FormField>
-      </div>
+                : "Elige una sala"}
+          </span>
+        </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField label="Tipo de clase" htmlFor="schedule-classtype" required>
-          <select
-            id="schedule-classtype"
-            value={classTypeId}
-            onChange={(e) => setClassTypeId(e.target.value)}
-            className={inputClass}
-          >
-            {classTypes.map((classType) => (
-              <option key={classType.id} value={classType.id}>
-                {classType.name} · {classType.durationMinutes} min
-              </option>
-            ))}
-          </select>
-        </FormField>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-semibold text-ink">Repetir cada semana</span>
+            <span className="text-xs text-ink-soft">
+              {repeatWeeks > 1 ? `Misma hora durante ${repeatWeeks} semanas` : "Solo esta fecha"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 rounded-[14px] bg-[#F3F2EE] p-1">
+            <button
+              type="button"
+              onClick={() => setRepeatWeeks((n) => Math.max(1, n - 1))}
+              aria-label="Menos semanas"
+              className="h-10 w-10 rounded-[10px] bg-white text-lg font-semibold text-ink"
+            >
+              −
+            </button>
+            <span className="min-w-7 text-center text-[15px] font-bold tabular-nums">{repeatWeeks}</span>
+            <button
+              type="button"
+              onClick={() => setRepeatWeeks((n) => Math.min(26, n + 1))}
+              aria-label="Más semanas"
+              className="h-10 w-10 rounded-[10px] bg-white text-lg font-semibold text-ink"
+            >
+              +
+            </button>
+          </div>
+        </div>
 
-        <FormField label="Instructor" htmlFor="schedule-instructor" required>
-          <select
-            id="schedule-instructor"
-            value={instructorId}
-            onChange={(e) => setInstructorId(e.target.value)}
-            className={inputClass}
-          >
-            {instructors.map((instructor) => (
-              <option key={instructor.id} value={instructor.id}>
-                {instructor.name}
-              </option>
-            ))}
-          </select>
-        </FormField>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField label="Fecha" htmlFor="schedule-date" required>
-          <input
-            id="schedule-date"
-            type="date"
-            required
-            min={todayInputValue}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className={inputClass}
-          />
-        </FormField>
-
-        <FormField label="Hora de inicio" htmlFor="schedule-time" required>
-          <input
-            id="schedule-time"
-            type="time"
-            required
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-            className={inputClass}
-          />
-        </FormField>
-      </div>
-
-      <FormField
-        label="Repetir semanalmente"
-        htmlFor="schedule-repeat"
-        hint="Crea la misma clase cada semana. Deja en 1 para una sola clase."
-      >
-        <input
-          id="schedule-repeat"
-          type="number"
-          min={1}
-          max={26}
-          value={repeatWeeks}
-          onChange={(e) => setRepeatWeeks(Number(e.target.value))}
-          className={inputClass}
-        />
-      </FormField>
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <div className="flex gap-2">
-        <Button type="submit" disabled={submitting}>
-          {submitting
-            ? "Guardando..."
-            : repeatWeeks > 1
-              ? `Programar ${repeatWeeks} clases`
-              : "Programar clase"}
-        </Button>
-        <Button type="button" variant="ghost" onClick={onDone}>
-          Cancelar
-        </Button>
-      </div>
-    </form>
+        {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      </form>
+    </Modal>
   );
 }

@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { arrayRemove, arrayUnion, doc, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { ImagePlus, Loader2, X } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
 
 import { db, storage } from "@/lib/firebase/client";
 import { optimizeImage } from "@/lib/optimizeImage";
-import { Dropzone, DropzoneEmptyState } from "@/components/kibo/dropzone";
 
 interface GalleryUploaderProps {
   tenantId: string;
@@ -15,22 +14,24 @@ interface GalleryUploaderProps {
   photoUrls: string[];
 }
 
-/** A multi-photo gallery manager: drag-and-drop (or tap) to add several photos at
- * once — each is downscaled and re-encoded in the browser before upload — plus a
- * grid to remove any of them. Writes straight to the branch's `photoUrls` array. */
+/** A multi-photo gallery manager: a grid of the branch's photos (the first one is the
+ * cover) plus a "+ Foto" tile to add several at once — each is downscaled and
+ * re-encoded in the browser before upload. Writes straight to the branch's `photoUrls`. */
 export function GalleryUploader({ tenantId, branchId, photoUrls }: GalleryUploaderProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [removingUrl, setRemovingUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const branchRef = doc(db, "tenants", tenantId, "branches", branchId);
 
-  async function handleDrop(files: File[]) {
+  async function handleFiles(files: File[]) {
+    if (files.length === 0) return;
     setError(null);
     setUploading(true);
     try {
       const uploadedUrls = await Promise.all(
-        files.map(async (file) => {
+        files.slice(0, 10).map(async (file) => {
           const { blob, contentType, extension } = await optimizeImage(file);
           const photoRef = ref(
             storage,
@@ -45,6 +46,7 @@ export function GalleryUploader({ tenantId, branchId, photoUrls }: GalleryUpload
       setError("No se pudieron subir una o más fotos. Intenta de nuevo.");
     } finally {
       setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
     }
   }
 
@@ -58,55 +60,60 @@ export function GalleryUploader({ tenantId, branchId, photoUrls }: GalleryUpload
   }
 
   return (
-    <div>
-      {photoUrls.length > 0 && (
-        <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {photoUrls.map((url) => (
-            <div key={url} className="group relative aspect-square overflow-hidden rounded-lg border border-gray-200">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="h-full w-full object-cover" />
-              <button
-                type="button"
-                onClick={() => handleRemove(url)}
-                disabled={removingUrl === url}
-                aria-label="Quitar foto"
-                className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-100"
-              >
-                {removingUrl === url ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
-                ) : (
-                  <X className="h-3.5 w-3.5" strokeWidth={2} />
-                )}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Dropzone
-        accept={{ "image/*": [] }}
-        maxFiles={10}
-        disabled={uploading}
-        onDrop={handleDrop}
-        onError={() => setError("No se pudieron subir una o más fotos. Intenta de nuevo.")}
-        className="min-h-0 p-6"
-      >
-        <DropzoneEmptyState>
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-3 gap-2">
+        {photoUrls.map((url, index) => (
+          <div key={url} className="group relative aspect-square overflow-hidden rounded-xl">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt="" className="h-full w-full object-cover" />
+            {index === 0 && (
+              <span className="absolute left-1.5 top-1.5 rounded-full bg-ink/75 px-[7px] py-0.5 text-[10px] font-bold text-white">
+                Portada
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => handleRemove(url)}
+              disabled={removingUrl === url}
+              aria-label="Quitar foto"
+              className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-ink/70 text-white opacity-100 transition-opacity disabled:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
+            >
+              {removingUrl === url ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+              ) : (
+                <X className="h-3.5 w-3.5" strokeWidth={2} />
+              )}
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-[1.5px] border-dashed border-ink/[0.18] bg-canvas text-xs font-semibold text-ink-soft hover:border-ink/30 disabled:opacity-60"
+        >
           {uploading ? (
             <>
-              <Loader2 className="h-5 w-5 animate-spin text-ink-soft" strokeWidth={1.75} />
-              <p className="mt-2 text-sm font-medium text-ink">Subiendo y optimizando...</p>
+              <Loader2 className="h-[18px] w-[18px] animate-spin" strokeWidth={2} />
+              Subiendo…
             </>
           ) : (
             <>
-              <ImagePlus className="h-5 w-5 text-ink-soft" strokeWidth={1.75} />
-              <p className="mt-2 text-sm font-medium text-ink">Agregar fotos</p>
-              <p className="mt-0.5 text-xs text-ink-soft">Arrastra o haz clic — puedes elegir varias a la vez</p>
+              <Plus className="h-[18px] w-[18px]" strokeWidth={2} />
+              Foto
             </>
           )}
-        </DropzoneEmptyState>
-      </Dropzone>
-      {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
+        </button>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => handleFiles(Array.from(e.target.files ?? []))}
+      />
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }

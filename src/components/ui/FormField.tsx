@@ -30,3 +30,14 @@ export function FormField({ label, htmlFor, hint, error, required, children }: F
     </div>
   );
 }
+
+/** Taller, touch-friendly input used inside admin sheets. */
+export const sheetInputClass =
+  "h-12 w-full rounded-xl border border-ink/[0.14] bg-white px-3.5 text-[15px] font-medium text-ink placeholder:text-ink-faint focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 disabled:bg-[#F7F6F3]";
+
+/** Pill used for single-choice pickers (class type, instructor, filters). */
+export function chipClass(selected: boolean) {
+  return `flex h-[42px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3.5 text-sm font-semibold transition-colors ${
+    selected ? "border-ink bg-ink text-white" : "border-ink/[0.12] bg-white text-ink hover:border-ink/30"
+  }`;
+}

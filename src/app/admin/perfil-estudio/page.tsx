@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { ExternalLink, ImagePlus } from "lucide-react";
+import { ImagePlus } from "lucide-react";
 
 import { db, storage } from "@/lib/firebase/client";
 import { optimizeImage } from "@/lib/optimizeImage";
@@ -15,15 +14,16 @@ import {
   profileFromDraft,
   type ProfileDraft,
 } from "@/lib/tenantProfile";
-import { Button } from "@/components/ui/Button";
-import { FileInput } from "@/components/ui/FileInput";
-import { FormField } from "@/components/ui/FormField";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StudioProfileFields } from "@/components/admin/StudioProfileFields";
+import { useToast } from "@/components/admin/Toast";
 
 export default function PerfilEstudioPage() {
   const { tenantId, tenant } = useTenant();
+  const toast = useToast();
   const profile = tenant.profile ?? DEFAULT_TENANT_PROFILE;
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const [draft, setDraft] = useState<ProfileDraft>(() => draftFromProfile(profile));
   const [heroImageUrl, setHeroImageUrl] = useState(profile.heroImageUrl);
@@ -31,9 +31,11 @@ export default function PerfilEstudioPage() {
   const [heroPreviewUrl, setHeroPreviewUrl] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  // Bumped after each save so the preview iframe reloads with the new version.
+  const [previewKey, setPreviewKey] = useState(0);
 
   // Warn before losing edits by closing the tab.
   useEffect(() => {
@@ -53,13 +55,12 @@ export default function PerfilEstudioPage() {
   function handleHeroChange(file: File | null) {
     setHeroFile(file);
     setDirty(true);
-    setSaved(false);
     setPreviewFor(file);
   }
 
   async function handleSave() {
+    if (!dirty) return;
     setSaving(true);
-    setSaved(false);
     setError(null);
     try {
       let nextHeroImageUrl = heroImageUrl;
@@ -79,8 +80,8 @@ export default function PerfilEstudioPage() {
       // Show the cleaned-up values so the admin sees what students will get.
       setDraft(draftFromProfile(next));
       setDirty(false);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+      setPreviewKey((k) => k + 1);
+      toast("Perfil guardado");
     } catch {
       setError("No se pudo guardar. Revisa tu conexión e intenta de nuevo.");
     } finally {
@@ -89,28 +90,26 @@ export default function PerfilEstudioPage() {
   }
 
   const displayedHeroUrl = heroPreviewUrl ?? heroImageUrl;
+  const studentUrl = `/s/${tenant.slug}/estudio`;
 
   const photoSlot = (
-    <FormField
-      label="Foto principal"
-      htmlFor="hero-photo"
-      hint="Horizontal, de preferencia 4:3. Se muestra grande junto al nombre del estudio."
-    >
-      <div className="space-y-3">
-        <div className="flex aspect-[4/3] w-full max-w-sm items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-          {displayedHeroUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={displayedHeroUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <ImagePlus className="h-8 w-8 text-gray-300" strokeWidth={1.5} />
-          )}
-        </div>
-        <FileInput
-          id="hero-photo"
-          accept="image/*"
-          onChange={handleHeroChange}
-          buttonLabel={displayedHeroUrl ? "Cambiar foto" : "Subir foto"}
-        />
+    <div className="flex flex-col gap-3">
+      <div className="flex aspect-[4/3] w-full max-w-[420px] items-center justify-center overflow-hidden rounded-2xl bg-[#F3F2EE]">
+        {displayedHeroUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={displayedHeroUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <ImagePlus className="h-8 w-8 text-ink-faint" strokeWidth={1.5} />
+        )}
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="h-10 rounded-xl border border-ink/[0.14] bg-white px-3.5 text-[13px] font-semibold text-ink"
+        >
+          {displayedHeroUrl ? "Cambiar foto" : "Subir foto"}
+        </button>
         {displayedHeroUrl && (
           <button
             type="button"
@@ -118,55 +117,106 @@ export default function PerfilEstudioPage() {
               setHeroImageUrl(null);
               handleHeroChange(null);
             }}
-            className="text-xs font-medium text-red-600 hover:underline"
+            className="h-10 px-3.5 text-[13px] font-semibold text-[#B42318]"
           >
-            Quitar foto
+            Quitar
           </button>
         )}
       </div>
-    </FormField>
+      <span className="text-xs text-ink-faint">Horizontal 4:3. Evita usar el logo: se recorta.</span>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0] ?? null;
+          if (file) handleHeroChange(file);
+          e.target.value = "";
+        }}
+      />
+    </div>
   );
 
   return (
-    <div>
+    <div className="flex flex-col gap-[18px]">
       <PageHeader
         title="Perfil del estudio"
-        description="Lo que tus alumnos ven en la sección 'Estudio' de su app. La dirección, el teléfono y las fotos de cada sede se editan en Sedes."
+        description="Lo que tus alumnos ven en “Estudio”. Dirección, teléfono y fotos de cada sede se editan en Sedes."
         action={
-          <Link
-            href={`/s/${tenant.slug}/estudio`}
-            target="_blank"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-ink hover:bg-gray-50"
+          <button
+            onClick={() => setPreviewOpen(true)}
+            className="h-11 rounded-xl border border-ink/[0.14] bg-white px-4 text-sm font-semibold text-ink hover:bg-[#F7F6F3] lg:hidden"
           >
-            Ver como alumno <ExternalLink className="h-4 w-4" strokeWidth={1.75} />
-          </Link>
+            Vista previa
+          </button>
         }
       />
 
-      <div className="max-w-2xl pb-24">
+      <div className="-mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
         <StudioProfileFields
           value={draft}
           onChange={(next) => {
             setDraft(next);
             setDirty(true);
-            setSaved(false);
           }}
           photoSlot={photoSlot}
         />
-      </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur md:left-60">
-        <div className="flex max-w-2xl items-center gap-3 px-4 py-3 md:px-8">
-          <Button onClick={handleSave} disabled={saving || !dirty}>
-            {saving ? "Guardando..." : "Guardar cambios"}
-          </Button>
-          {saved && <span className="text-sm text-brand-700">Guardado ✓</span>}
-          {error && <span className="text-sm text-red-600">{error}</span>}
-          {dirty && !saving && !error && (
-            <span className="text-sm text-ink-soft">Tienes cambios sin guardar</span>
-          )}
+        <div className="sticky top-0 hidden flex-col gap-2.5 lg:flex">
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] font-semibold text-ink-soft">
+              Así lo ven tus alumnos{dirty ? " (al guardar)" : ""}
+            </span>
+            <a
+              href={studentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[13px] font-semibold text-brand-700 hover:text-brand-800"
+            >
+              Abrir
+            </a>
+          </div>
+          <iframe
+            key={previewKey}
+            src={studentUrl}
+            title="Vista previa del estudio"
+            className="h-[680px] w-[390px] rounded-[28px] border-8 border-ink bg-canvas"
+          />
         </div>
       </div>
+
+      <div
+        className={`sticky bottom-2 z-10 flex items-center justify-between gap-3 rounded-[18px] py-2.5 pl-[18px] pr-2.5 lg:bottom-4 lg:mr-[414px] ${
+          dirty
+            ? "bg-ink text-white shadow-[0_16px_36px_-12px_rgba(22,24,29,0.5)]"
+            : "border border-ink/[0.08] bg-white text-ink-soft"
+        }`}
+      >
+        <span className={`text-sm font-medium ${dirty ? "text-white/80" : ""}`}>
+          {error ?? (saving ? "Guardando…" : dirty ? "Tienes cambios sin guardar" : "Todo guardado")}
+        </span>
+        <button
+          onClick={handleSave}
+          disabled={!dirty || saving}
+          className={`h-11 rounded-xl px-[18px] text-sm font-semibold ${
+            dirty ? "bg-white text-ink" : "cursor-default bg-[#F3F2EE] text-ink-faint"
+          }`}
+        >
+          Guardar cambios
+        </button>
+      </div>
+
+      {previewOpen && (
+        <Modal title="Vista previa" subtitle="Así lo ven tus alumnos" onClose={() => setPreviewOpen(false)}>
+          <iframe
+            key={previewKey}
+            src={studentUrl}
+            title="Vista previa del estudio"
+            className="-mx-5 -mb-5 h-[620px] w-[calc(100%+40px)] border-t border-ink/[0.08]"
+          />
+        </Modal>
+      )}
     </div>
   );
 }

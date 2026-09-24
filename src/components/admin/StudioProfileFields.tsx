@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, type InputHTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
-import { AtSign, Mail, MessageCircle, Plus, X } from "lucide-react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
+import { Plus, X } from "lucide-react";
 
 import { AMENITY_SUGGESTIONS, type ProfileDraft } from "@/lib/tenantProfile";
-import { Button } from "@/components/ui/Button";
-import { FormField, inputClass } from "@/components/ui/FormField";
+import { sheetInputClass } from "@/components/ui/FormField";
+import { cardClass, textareaClass } from "@/components/admin/ui";
 
 export function ProfileSection({
   title,
@@ -17,30 +17,53 @@ export function ProfileSection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-5">
-      <h2 className="font-semibold text-ink">{title}</h2>
-      {description && <p className="mt-0.5 text-sm text-ink-soft">{description}</p>}
-      <div className="mt-4 space-y-5">{children}</div>
+    <section className={`flex flex-col gap-3 p-5 ${cardClass}`}>
+      <div className="flex flex-col gap-0.5">
+        <h2 className="font-sans text-[15px] font-bold tracking-normal text-ink">{title}</h2>
+        {description && <p className="text-[13px] text-ink-soft">{description}</p>}
+      </div>
+      {children}
     </section>
   );
 }
 
-function IconInput({
-  icon: Icon,
-  ...props
-}: { icon: typeof Mail } & InputHTMLAttributes<HTMLInputElement>) {
+/** Input with a sand label block on its left ("WhatsApp | 55 1234 5678"). */
+function PrefixedInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  inputMode,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  type?: string;
+  inputMode?: "tel" | "email" | "text";
+}) {
   return (
-    <div className="relative">
-      <Icon className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-gray-400" strokeWidth={1.75} />
-      <input {...props} className={`${inputClass} pl-9`} />
-    </div>
+    <label className="flex h-12 items-center overflow-hidden rounded-xl border border-ink/[0.14] bg-white focus-within:border-brand-600">
+      <span className="flex h-full w-[104px] shrink-0 items-center bg-[#F3F2EE] px-3 text-[13px] font-semibold text-ink-soft">
+        {label}
+      </span>
+      <input
+        type={type}
+        inputMode={inputMode}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="h-full min-w-0 flex-1 border-0 bg-transparent px-3 text-sm font-medium text-ink outline-none placeholder:text-ink-faint focus-visible:outline-none"
+      />
+    </label>
   );
 }
 
 /**
  * Every text field of the studio's public profile, shared by the onboarding wizard and
  * the admin "Perfil del estudio" page so both stay in sync. `photoSlot` lets the admin
- * page put the hero photo uploader at the top of the first section.
+ * page put the hero photo uploader first.
  */
 export function StudioProfileFields({
   value,
@@ -52,8 +75,7 @@ export function StudioProfileFields({
   photoSlot?: ReactNode;
 }) {
   const [amenityDraft, setAmenityDraft] = useState("");
-  const set = <K extends keyof ProfileDraft>(key: K, v: ProfileDraft[K]) =>
-    onChange({ ...value, [key]: v });
+  const set = <K extends keyof ProfileDraft>(key: K, v: ProfileDraft[K]) => onChange({ ...value, [key]: v });
 
   function addAmenity(raw: string) {
     const name = raw.trim();
@@ -74,109 +96,79 @@ export function StudioProfileFields({
   );
 
   return (
-    <div className="space-y-5">
-      <ProfileSection title="Presentación" description="Lo primero que ve un alumno al abrir la página de tu estudio.">
-        {photoSlot}
+    <div className="flex flex-col gap-3.5">
+      {photoSlot && <ProfileSection title="Foto principal">{photoSlot}</ProfileSection>}
 
-        <FormField
-          label="Lema"
-          htmlFor="profile-tagline"
-          hint="Una línea corta sobre el nombre — ej. Pilates Reformer · Roma Norte, CDMX"
-        >
+      <ProfileSection title="Presentación" description="Lo primero que ve un alumno al abrir la página de tu estudio.">
+        <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink">
+          Lema
           <input
-            id="profile-tagline"
             maxLength={80}
             value={value.tagline}
             onChange={(e) => set("tagline", e.target.value)}
             placeholder="Pilates Reformer · Roma Norte, CDMX"
-            className={inputClass}
+            className={sheetInputClass}
           />
-        </FormField>
-
-        <FormField
-          label="Descripción"
-          htmlFor="profile-description"
-          hint="Quiénes son, tu estilo y lo que hace especial a tu estudio. Puedes escribir varias líneas."
-        >
+        </label>
+        <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink">
+          Descripción
           <textarea
-            id="profile-description"
-            rows={5}
+            rows={4}
             maxLength={600}
             value={value.description}
             onChange={(e) => set("description", e.target.value)}
             placeholder="Clases de Pilates Reformer en grupos reducidos para todos los niveles..."
-            className={`${inputClass} resize-y leading-relaxed`}
+            className={textareaClass}
           />
-          <p className="mt-1 text-right text-xs text-gray-400">{value.description.length}/600</p>
-        </FormField>
+          <span className="text-right text-xs font-normal text-ink-faint">{value.description.length}/600</span>
+        </label>
       </ProfileSection>
 
-      <ProfileSection
-        title="Contacto y redes"
-        description="Cada uno aparece como botón en la página. Deja vacío el que no uses."
-      >
-        <FormField
+      <ProfileSection title="Contacto" description="Cada uno aparece como botón en la página. Deja vacío el que no uses.">
+        <PrefixedInput
           label="WhatsApp"
-          htmlFor="profile-whatsapp"
-          hint="Tu número con lada. Si pones 10 dígitos, agregamos +52 automáticamente."
-        >
-          <IconInput
-            icon={MessageCircle}
-            id="profile-whatsapp"
-            inputMode="tel"
-            value={value.whatsapp}
-            onChange={(e) => set("whatsapp", e.target.value)}
-            placeholder="55 6440 2067"
-          />
-        </FormField>
-
-        <FormField label="Instagram" htmlFor="profile-instagram" hint="Tu @usuario o el link de tu perfil.">
-          <IconInput
-            icon={AtSign}
-            id="profile-instagram"
-            value={value.instagram}
-            onChange={(e) => set("instagram", e.target.value)}
-            placeholder="@tuestudio"
-          />
-        </FormField>
-
-        <FormField label="Email de contacto" htmlFor="profile-email">
-          <IconInput
-            icon={Mail}
-            id="profile-email"
-            type="email"
-            value={value.email}
-            onChange={(e) => set("email", e.target.value)}
-            placeholder="hola@tuestudio.com"
-          />
-        </FormField>
+          inputMode="tel"
+          value={value.whatsapp}
+          onChange={(v) => set("whatsapp", v)}
+          placeholder="55 1234 5678"
+        />
+        <PrefixedInput
+          label="Email"
+          type="email"
+          inputMode="email"
+          value={value.email}
+          onChange={(v) => set("email", v)}
+          placeholder="hola@tuestudio.com"
+        />
+        <PrefixedInput
+          label="Instagram"
+          value={value.instagram}
+          onChange={(v) => set("instagram", v)}
+          placeholder="@tuestudio"
+        />
       </ProfileSection>
 
-      <ProfileSection
-        title="Amenidades"
-        description="Lo que ofrece tu estudio. Escribe una y presiona Enter, o toca una sugerencia."
-      >
+      <ProfileSection title="Amenidades">
         {value.amenities.length > 0 && (
           <ul className="flex flex-wrap gap-2">
             {value.amenities.map((amenity) => (
               <li
                 key={amenity}
-                className="flex items-center gap-1 rounded-full bg-brand-50 py-1 pl-3 pr-1.5 text-sm text-brand-800"
+                className="flex h-9 items-center gap-1 rounded-full bg-brand-50 pl-3 pr-1.5 text-[13px] font-semibold text-brand-800"
               >
                 {amenity}
                 <button
                   type="button"
                   onClick={() => set("amenities", value.amenities.filter((a) => a !== amenity))}
                   aria-label={`Quitar ${amenity}`}
-                  className="rounded-full p-0.5 hover:bg-brand-100"
+                  className="flex h-[26px] w-[26px] items-center justify-center rounded-full hover:bg-brand-100"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-3.5 w-3.5" strokeWidth={2.2} />
                 </button>
               </li>
             ))}
           </ul>
         )}
-
         <div className="flex gap-2">
           <input
             value={amenityDraft}
@@ -184,49 +176,43 @@ export function StudioProfileFields({
             onKeyDown={onAmenityKeyDown}
             placeholder="Ej. Estacionamiento"
             aria-label="Nueva amenidad"
-            className={inputClass}
+            className={`${sheetInputClass} h-11 text-sm`}
           />
-          <Button type="button" variant="secondary" onClick={() => addAmenity(amenityDraft)}>
+          <button
+            type="button"
+            onClick={() => addAmenity(amenityDraft)}
+            className="h-11 shrink-0 rounded-xl bg-[#F3F2EE] px-4 text-sm font-semibold text-ink hover:bg-[#EAE8E3]"
+          >
             Agregar
-          </Button>
+          </button>
         </div>
-
         {suggestions.length > 0 && (
-          <div>
-            <p className="mb-2 text-xs text-ink-soft">Sugerencias</p>
-            <div className="flex flex-wrap gap-2">
-              {suggestions.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => addAmenity(s)}
-                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-3 py-1 text-sm text-ink-soft hover:border-brand-600 hover:text-brand-700"
-                >
-                  <Plus className="h-3.5 w-3.5" /> {s}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => addAmenity(s)}
+                className="inline-flex h-8 items-center gap-1 rounded-full border border-dashed border-ink/20 px-3 text-[13px] text-ink-soft hover:border-brand-600 hover:text-brand-700"
+              >
+                <Plus className="h-3.5 w-3.5" /> {s}
+              </button>
+            ))}
           </div>
         )}
       </ProfileSection>
 
-      <ProfileSection title="Políticas" description="Reglas de tu estudio. Se muestran en una sección desplegable.">
-        <FormField
-          label="Políticas"
-          htmlFor="profile-policies"
-          hint="Una por línea — cada línea aparece como un punto de la lista."
-        >
-          <textarea
-            id="profile-policies"
-            rows={5}
-            value={value.policies}
-            onChange={(e) => set("policies", e.target.value)}
-            placeholder={
-              "Cancela sin costo hasta 12 h antes de tu clase.\nLlega 10 minutos antes.\nUsa calcetas antiderrapantes."
-            }
-            className={`${inputClass} resize-y leading-relaxed`}
-          />
-        </FormField>
+      <ProfileSection title="Políticas" description="Una por línea — cada línea aparece como un punto de la lista.">
+        <textarea
+          rows={4}
+          value={value.policies}
+          onChange={(e) => set("policies", e.target.value)}
+          aria-label="Políticas"
+          placeholder={
+            "Cancela sin costo hasta 12 h antes de tu clase.\nLlega 10 minutos antes.\nUsa calcetas antiderrapantes."
+          }
+          className={textareaClass}
+        />
       </ProfileSection>
     </div>
   );

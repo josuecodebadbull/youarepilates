@@ -44,7 +44,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const tokenResult = await user.getIdTokenResult();
+      let tokenResult;
+      try {
+        tokenResult = await user.getIdTokenResult();
+      } catch {
+        // Transient failure (offline / flaky network) refreshing the token: keep the
+        // session and the last known claims instead of bouncing the user to /login.
+        // With no prior claims we keep `loading` so the admin guard doesn't redirect.
+        setState((prev) =>
+          prev.claims ? { user, claims: prev.claims, loading: false } : prev,
+        );
+        return;
+      }
       const claims: AuthClaims = {
         tenantId: (tokenResult.claims.tenantId as string | undefined) ?? null,
         role: (tokenResult.claims.role as UserRole | undefined) ?? defaultClaims.role,

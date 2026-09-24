@@ -1,38 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import {
-  addDoc,
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  Timestamp,
-  where,
-} from "firebase/firestore";
-import { ChevronRight, GraduationCap } from "lucide-react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { addDoc, collection, onSnapshot, orderBy, query, Timestamp, where } from "firebase/firestore";
+import { Search } from "lucide-react";
 import { httpsCallable } from "firebase/functions";
-import type { ColumnDef } from "@tanstack/react-table";
 
 import { db, functions } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
-import type { PackageDoc, StudentPassDoc, UserDoc } from "@/lib/types/firestore";
-import { Avatar } from "@/components/ui/Avatar";
-import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { FormField, inputClass } from "@/components/ui/FormField";
-import { Modal } from "@/components/ui/Modal";
-import { NewStudentForm } from "@/components/admin/NewStudentForm";
-import { PageHeader } from "@/components/ui/PageHeader";
 import {
-  TableBody,
-  TableCell,
-  TableColumnHeader,
-  TableHead,
-  TableHeader,
-  TableProvider,
-  TableRow,
-} from "@/components/kibo/table";
+  formatMoney,
+  formatShortDate,
+  initials,
+  useCreditsByStudent,
+  type StudentCredits,
+} from "@/lib/admin/data";
+import type { PackageDoc, StudentPassDoc, UserDoc } from "@/lib/types/firestore";
+import { chipClass, sheetInputClass } from "@/components/ui/FormField";
+import { Modal } from "@/components/ui/Modal";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { NewStudentForm } from "@/components/admin/NewStudentForm";
+import { useToast } from "@/components/admin/Toast";
 
 interface Student extends UserDoc {
   id: string;
@@ -44,18 +32,61 @@ interface Pass extends StudentPassDoc {
   id: string;
 }
 
-interface StudentRow extends Student {
-  totalCredits: number;
+type Filter = "todos" | "sin" | "vencer" | "cuenta";
+
+const EXPIRING_DAYS = 7;
+
+const FILTERS: { key: Filter; label: string; test: (s: Student, c?: StudentCredits) => boolean }[] = [
+  { key: "todos", label: "Todos", test: () => true },
+  { key: "sin", label: "Sin créditos", test: (_, c) => !(c && c.credits > 0) },
+  {
+    key: "vencer",
+    label: "Por vencer",
+    test: (_, c) =>
+      !!c && c.credits > 0 && !!c.nextExpiry && c.nextExpiry.getTime() - Date.now() < EXPIRING_DAYS * 86_400_000,
+  },
+  { key: "cuenta", label: "Sin cuenta", test: (s) => s.hasAccount === false },
+];
+
+function isFilter(value: string | null): value is Filter {
+  return FILTERS.some((f) => f.key === value);
 }
 
 export default function AlumnosPage() {
+  return (
+    <Suspense>
+      <AlumnosContent />
+    </Suspense>
+  );
+}
+
+function AlumnosContent() {
   const { tenantId } = useTenant();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [students, setStudents] = useState<Student[]>([]);
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [creditsByStudent, setCreditsByStudent] = useState<Record<string, number>>({});
-  const [managingStudent, setManagingStudent] = useState<Student | null>(null);
+  const [managingId, setManagingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [q, setQ] = useState(searchParams.get("q") ?? "");
+  const [filter, setFilter] = useState<Filter>(() => {
+    const initial = searchParams.get("filtro");
+    return isFilter(initial) ? initial : "todos";
+  });
+  const toast = useToast();
+  const { byStudent: credits } = useCreditsByStudent(tenantId);
+
+  // Header search / quick actions deep-link here with ?q=, ?filtro= or ?nuevo=1.
+  const paramQ = searchParams.get("q");
+  const paramFilter = searchParams.get("filtro");
+  const wantsNew = searchParams.get("nuevo") === "1";
+  useEffect(() => {
+    if (paramQ !== null) setQ(paramQ);
+    if (isFilter(paramFilter)) setFilter(paramFilter);
+    if (wantsNew) setCreating(true);
+    if (paramQ !== null || paramFilter !== null || wantsNew) router.replace("/admin/alumnos");
+  }, [paramQ, paramFilter, wantsNew, router]);
 
   useEffect(() => {
     const studentsQuery = query(
@@ -77,174 +108,224 @@ export default function AlumnosPage() {
     );
   }, [tenantId]);
 
-  const studentIds = useMemo(() => students.map((s) => s.id).join(","), [students]);
-
-  useEffect(() => {
-    const ids = studentIds ? studentIds.split(",") : [];
-    const unsubscribes = ids.map((studentId) =>
-      onSnapshot(
-        query(
-          collection(db, "tenants", tenantId, "studentPasses"),
-          where("studentId", "==", studentId),
-          where("status", "==", "active"),
+  const needle = q.trim().toLowerCase();
+  const activeFilter = FILTERS.find((f) => f.key === filter)!;
+  const rows = useMemo(
+    () =>
+      students
+        .filter((s) => activeFilter.test(s, credits[s.id]))
+        .filter(
+          (s) =>
+            !needle ||
+            `${s.displayName} ${s.email} ${s.phone}`.toLowerCase().includes(needle),
         ),
-        (snapshot) => {
-          const total = snapshot.docs.reduce(
-            (sum, d) => sum + (d.data() as StudentPassDoc).remainingCredits,
-            0,
-          );
-          setCreditsByStudent((prev) => ({ ...prev, [studentId]: total }));
-        },
-      ),
-    );
-    return () => unsubscribes.forEach((unsub) => unsub());
-  }, [tenantId, studentIds]);
+    [students, credits, activeFilter, needle],
+  );
 
-  const rows: StudentRow[] = students.map((student) => ({
-    ...student,
-    totalCredits: creditsByStudent[student.id] ?? 0,
-  }));
-
-  const columns: ColumnDef<StudentRow>[] = [
-    {
-      accessorKey: "displayName",
-      header: ({ column }) => <TableColumnHeader column={column} title="Alumno" />,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-3">
-          <Avatar name={row.original.displayName || row.original.email} size={32} />
-          <div className="min-w-0">
-            <p className="truncate font-medium text-ink">
-              {row.original.displayName || "(sin nombre)"}
-              {row.original.hasAccount === false && (
-                <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-              Sin cuenta
-            </span>
-              )}
-            </p>
-            <p className="truncate text-xs text-ink-soft">
-              {row.original.email || row.original.phone || "Sin datos de contacto"}
-            </p>
-          </div>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "totalCredits",
-      header: ({ column }) => <TableColumnHeader column={column} title="Créditos" />,
-      cell: ({ row }) => (
-        <span className="font-medium text-ink">
-          {row.original.totalCredits > 0 ? row.original.totalCredits : "Sin créditos"}
-        </span>
-      ),
-    },
-    {
-      id: "actions",
-      header: "",
-      cell: ({ row }) => (
-        <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => setManagingStudent(row.original)}>
-          Gestionar créditos
-        </Button>
-      ),
-    },
-  ];
+  const managingStudent = managingId ? students.find((s) => s.id === managingId) : undefined;
 
   return (
-    <div>
+    <div className="flex flex-col gap-[18px]">
       <PageHeader
         title="Alumnos"
-        description="Tus alumnos, con o sin cuenta en la app. Dales créditos aquí para ventas en efectivo, cortesías, o para hacer pruebas."
-        action={<Button onClick={() => setCreating(true)}>+ Nuevo alumno</Button>}
+        description={
+          loaded
+            ? `${students.length} ${students.length === 1 ? "alumno" : "alumnos"} · toca uno para gestionar sus créditos`
+            : "Cargando…"
+        }
       />
 
-      {creating && (
-        <Modal title="Nuevo alumno" onClose={() => setCreating(false)}>
-          <NewStudentForm onCreated={() => setCreating(false)} onCancel={() => setCreating(false)} />
-        </Modal>
-      )}
+      <div className="-mt-6 flex h-12 items-center gap-2.5 rounded-[14px] border border-ink/[0.12] bg-white px-3.5 focus-within:border-brand-600">
+        <Search className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={1.8} />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por nombre, email o teléfono"
+          aria-label="Buscar alumno"
+          className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-ink outline-none placeholder:text-ink-faint focus-visible:outline-none"
+        />
+      </div>
+
+      <div className="no-scrollbar -mx-0.5 flex gap-2 overflow-x-auto px-0.5">
+        {FILTERS.map((f) => {
+          const count = students.filter((s) => f.test(s, credits[s.id])).length;
+          return (
+            <button key={f.key} onClick={() => setFilter(f.key)} className={chipClass(filter === f.key)}>
+              {f.label}
+              <span className="text-xs font-semibold opacity-60">{count}</span>
+            </button>
+          );
+        })}
+      </div>
 
       {loaded && students.length === 0 ? (
-        <EmptyState
-          icon={<GraduationCap className="h-7 w-7" strokeWidth={1.75} />}
-          title="Todavía no tienes alumnos"
-          description="Agrega a tu primer alumno, o comparte el link de tu app (lo tienes en la barra lateral) para que se registren solos."
-          action={<Button onClick={() => setCreating(true)}>+ Agregar mi primer alumno</Button>}
-        />
+        <div className="flex flex-col items-center gap-3 rounded-[22px] border-[1.5px] border-dashed border-ink/15 px-5 py-10 text-center">
+          <p className="text-[15px] font-semibold text-ink">Todavía no tienes alumnos</p>
+          <p className="max-w-sm text-sm text-ink-soft">
+            Agrega a tu primer alumno, o comparte el link de tu app para que se registren solos.
+          </p>
+          <button
+            onClick={() => setCreating(true)}
+            className="h-11 rounded-xl bg-ink px-[18px] text-sm font-semibold text-white"
+          >
+            Agregar mi primer alumno
+          </button>
+        </div>
+      ) : loaded && rows.length === 0 ? (
+        <p className="rounded-[22px] border-[1.5px] border-dashed border-ink/15 p-7 text-center text-sm text-ink-soft">
+          Sin resultados para esta búsqueda.
+        </p>
       ) : (
         <>
-          {/* Mobile: a simple tappable card list. */}
-          <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 md:hidden">
-            {rows.map((student) => (
-              <li key={student.id}>
+          {/* Phones / tablets: tappable list. */}
+          <div className="overflow-hidden rounded-[22px] border border-ink/[0.08] bg-white lg:hidden">
+            {rows.map((student) => {
+              const c = credits[student.id];
+              return (
                 <button
-                  onClick={() => setManagingStudent(student)}
-                  className="flex w-full items-center gap-3 p-4 text-left hover:bg-gray-50"
+                  key={student.id}
+                  onClick={() => setManagingId(student.id)}
+                  className="flex min-h-[68px] w-full items-center gap-3 border-b border-ink/[0.06] px-4 py-3.5 text-left text-ink last:border-b-0 hover:bg-[#FAFAF8]"
                 >
-                  <Avatar name={student.displayName || student.email} size={40} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-gray-900">
-                      {student.displayName || "(sin nombre)"}
-                      {student.hasAccount === false && (
-                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-              Sin cuenta
-            </span>
-                      )}
-                    </p>
-                    <p className="truncate text-sm text-gray-500">
-                      {student.email || student.phone || "Sin datos de contacto"}
-                    </p>
+                  <StudentAvatar name={student.displayName || student.email} hasCredits={!!c && c.credits > 0} />
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <StudentName student={student} className="text-[15px]" />
+                    <span className="truncate text-[13px] text-ink-soft">{contactOf(student)}</span>
                   </div>
-                  <span className="shrink-0 text-sm font-medium text-gray-600">
-                    {student.totalCredits > 0 ? `${student.totalCredits} créditos` : "Sin créditos"}
-                  </span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" strokeWidth={1.75} />
+                  <div className="flex shrink-0 flex-col items-end gap-0.5">
+                    <CreditsLabel credits={c} />
+                    <span className="text-[11px] text-ink-faint">
+                      {c && c.credits > 0 && c.nextExpiry ? `Vencen ${formatShortDate(c.nextExpiry)}` : "—"}
+                    </span>
+                  </div>
                 </button>
-              </li>
-            ))}
-          </ul>
+              );
+            })}
+          </div>
 
-          {/* Desktop: a sortable table — click a column title to sort by name or créditos. */}
-          <div className="hidden rounded-lg border border-gray-200 md:block">
-            <TableProvider columns={columns} data={rows}>
-              <TableHeader>{({ header }) => <TableHead header={header} key={header.id} />}</TableHeader>
-              <TableBody emptyMessage="Sin alumnos.">
-                {({ row }) => (
-                  <TableRow row={row} key={row.id}>
-                    {({ cell }) => <TableCell cell={cell} key={cell.id} />}
-                  </TableRow>
-                )}
-              </TableBody>
-            </TableProvider>
+          {/* Desktop: table. */}
+          <div className="hidden overflow-hidden rounded-[22px] border border-ink/[0.08] bg-white lg:block">
+            <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_170px] gap-4 border-b border-ink/[0.08] px-5 py-3 text-xs font-semibold uppercase tracking-[0.04em] text-ink-faint">
+              <span>Alumno</span>
+              <span>Créditos</span>
+              <span>Vencen</span>
+              <span />
+            </div>
+            {rows.map((student) => {
+              const c = credits[student.id];
+              const expiringSoon =
+                !!c?.nextExpiry && c.credits > 0 && c.nextExpiry.getTime() - Date.now() < EXPIRING_DAYS * 86_400_000;
+              return (
+                <div
+                  key={student.id}
+                  className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_170px] items-center gap-4 border-b border-ink/[0.06] px-5 py-3 last:border-b-0"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <StudentAvatar name={student.displayName || student.email} hasCredits={!!c && c.credits > 0} />
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <StudentName student={student} className="text-sm" />
+                      <span className="truncate text-xs text-ink-soft">{contactOf(student)}</span>
+                    </div>
+                  </div>
+                  <CreditsLabel credits={c} />
+                  <span
+                    className={`text-[13px] ${expiringSoon ? "font-semibold text-amber-800" : "text-ink-soft"}`}
+                  >
+                    {c && c.credits > 0 && c.nextExpiry ? formatShortDate(c.nextExpiry) : "—"}
+                  </span>
+                  <button
+                    onClick={() => setManagingId(student.id)}
+                    className="h-9 justify-self-end rounded-[10px] border border-ink/[0.14] bg-white px-3.5 text-[13px] font-semibold text-ink hover:bg-[#F7F6F3]"
+                  >
+                    Gestionar
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </>
       )}
 
-      {managingStudent && (
-        <Modal title={managingStudent.displayName || managingStudent.email || "Alumno"} onClose={() => setManagingStudent(null)}>
-          <StudentCreditsPanel
-            tenantId={tenantId}
-            student={managingStudent}
-            packages={packages}
-            accounts={students.filter((s) => s.hasAccount !== false)}
-            onLinked={() => setManagingStudent(null)}
+      {creating && (
+        <Modal title="Nuevo alumno" subtitle="Para ventas en mostrador o cortesías" onClose={() => setCreating(false)}>
+          <NewStudentForm
+            onCreated={(student) => {
+              setCreating(false);
+              toast("Alumno creado");
+              setManagingId(student.id);
+            }}
+            onCancel={() => setCreating(false)}
           />
         </Modal>
+      )}
+
+      {managingStudent && (
+        <StudentSheet
+          tenantId={tenantId}
+          student={managingStudent}
+          packages={packages.filter((p) => p.active !== false)}
+          accounts={students.filter((s) => s.hasAccount !== false)}
+          onClose={() => setManagingId(null)}
+        />
       )}
     </div>
   );
 }
 
-function StudentCreditsPanel({
+function contactOf(student: Student) {
+  return student.email || student.phone || "Sin datos de contacto";
+}
+
+function StudentAvatar({ name, hasCredits }: { name: string; hasCredits: boolean }) {
+  return (
+    <span
+      className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full text-[13px] font-bold ${
+        hasCredits ? "bg-brand-50 text-brand-800" : "bg-[#F3F2EE] text-ink-soft"
+      }`}
+    >
+      {initials(name)}
+    </span>
+  );
+}
+
+function StudentName({ student, className }: { student: Student; className: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className={`truncate font-semibold text-ink ${className}`}>{student.displayName || "(sin nombre)"}</span>
+      {student.hasAccount === false && (
+        <span className="shrink-0 rounded-full bg-amber-100 px-[7px] py-px text-[10px] font-bold text-amber-800">
+          Sin cuenta
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CreditsLabel({ credits }: { credits?: StudentCredits }) {
+  const n = credits?.credits ?? 0;
+  return (
+    <span className={`text-sm font-bold ${n > 0 ? "text-ink" : "text-[#B42318]"}`}>
+      {n > 0 ? `${n} ${n === 1 ? "crédito" : "créditos"}` : "Sin créditos"}
+    </span>
+  );
+}
+
+function errorText(err: unknown): string {
+  return (err as { message?: string }).message ?? "Ocurrió un error. Intenta de nuevo.";
+}
+
+function StudentSheet({
   tenantId,
   student,
   packages,
   accounts,
-  onLinked,
+  onClose,
 }: {
   tenantId: string;
   student: Student;
   packages: PackageItem[];
   accounts: Student[];
-  onLinked: () => void;
+  onClose: () => void;
 }) {
   const [passes, setPasses] = useState<Pass[]>([]);
 
@@ -255,40 +336,168 @@ function StudentCreditsPanel({
       where("status", "==", "active"),
     );
     return onSnapshot(passesQuery, (snapshot) => {
-      setPasses(snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as StudentPassDoc) })));
+      const now = Date.now();
+      setPasses(
+        snapshot.docs
+          .map((d) => ({ id: d.id, ...(d.data() as StudentPassDoc) }))
+          .filter((p) => p.expiresAt.toMillis() > now),
+      );
     });
   }, [tenantId, student.id]);
 
   const totalCredits = passes.reduce((sum, pass) => sum + pass.remainingCredits, 0);
+  const nextExpiry = passes
+    .filter((p) => p.remainingCredits > 0)
+    .map((p) => p.expiresAt.toDate())
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+  const phoneDigits = student.phone.replace(/\D/g, "");
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-ink-soft">{student.email || student.phone}</p>
-      <p className="text-sm font-medium text-ink">
-        Créditos activos: {totalCredits > 0 ? totalCredits : "ninguno"}
-      </p>
-      {passes.length > 0 && (
-        <ul className="space-y-1 text-sm text-ink-soft">
-          {passes.map((pass) => (
-            <li key={pass.id}>
-              {pass.remainingCredits}/{pass.initialCredits} créditos · vence{" "}
-              {pass.expiresAt.toDate().toLocaleDateString("es-MX")}
-            </li>
-          ))}
-        </ul>
-      )}
+    <Modal title={student.displayName || student.email || "Alumno"} subtitle={contactOf(student)} onClose={onClose}>
+      <div className="flex flex-col gap-[18px]">
+        <div className="flex items-end justify-between gap-3 rounded-[20px] bg-ink p-[18px] text-white">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.06em] text-brand-200">Créditos activos</span>
+            <span className="font-display text-[44px] font-semibold leading-none">{totalCredits}</span>
+          </div>
+          <span className="text-right text-[13px] text-white/75">
+            {nextExpiry ? `Vencen ${formatShortDate(nextExpiry)}` : "Sin paquete activo"}
+          </span>
+        </div>
 
-      <AddCreditsForm tenantId={tenantId} studentId={student.id} packages={packages} />
+        {passes.length > 1 && (
+          <ul className="-mt-2 flex flex-col gap-1 text-[13px] text-ink-soft">
+            {passes.map((pass) => (
+              <li key={pass.id}>
+                {pass.remainingCredits}/{pass.initialCredits} créditos · vence {formatShortDate(pass.expiresAt.toDate())}
+              </li>
+            ))}
+          </ul>
+        )}
 
-      {student.hasAccount === false && (
-        <NoAccountTools student={student} accounts={accounts} onLinked={onLinked} />
-      )}
-    </div>
+        <AddCredits tenantId={tenantId} studentId={student.id} packages={packages} />
+
+        {student.hasAccount === false && <NoAccountTools student={student} accounts={accounts} onLinked={onClose} />}
+
+        {phoneDigits && (
+          <div className="grid grid-cols-2 gap-2">
+            <a
+              href={`https://wa.me/${phoneDigits.length === 10 ? `52${phoneDigits}` : phoneDigits}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-11 items-center justify-center rounded-xl bg-[#F3F2EE] text-sm font-semibold text-ink hover:bg-[#EAE8E3]"
+            >
+              WhatsApp
+            </a>
+            <a
+              href={`tel:${student.phone}`}
+              className="flex h-11 items-center justify-center rounded-xl bg-[#F3F2EE] text-sm font-semibold text-ink hover:bg-[#EAE8E3]"
+            >
+              Llamar
+            </a>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
-function errorText(err: unknown): string {
-  return (err as { message?: string }).message ?? "Ocurrió un error. Intenta de nuevo.";
+function AddCredits({
+  tenantId,
+  studentId,
+  packages,
+}: {
+  tenantId: string;
+  studentId: string;
+  packages: PackageItem[];
+}) {
+  const toast = useToast();
+  const [packageId, setPackageId] = useState<string>(packages[0]?.id ?? "custom");
+  const [customCredits, setCustomCredits] = useState(1);
+  const [customValidityDays, setCustomValidityDays] = useState(30);
+  const [submitting, setSubmitting] = useState(false);
+
+  const selectedPackage = packages.find((p) => p.id === packageId);
+  const creditAmount = selectedPackage?.creditAmount ?? customCredits;
+
+  async function handleAdd() {
+    setSubmitting(true);
+    try {
+      const validityDays = selectedPackage?.validityDays ?? customValidityDays;
+      const expiresAt = Timestamp.fromMillis(Date.now() + validityDays * 24 * 60 * 60 * 1000);
+
+      await addDoc(collection(db, "tenants", tenantId, "studentPasses"), {
+        studentId,
+        packageId: selectedPackage?.id ?? "manual",
+        initialCredits: creditAmount,
+        remainingCredits: creditAmount,
+        expiresAt,
+        status: "active",
+      } satisfies StudentPassDoc);
+
+      toast(`${creditAmount} ${creditAmount === 1 ? "crédito agregado" : "créditos agregados"}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const tileClass = (selected: boolean) =>
+    `flex min-h-[62px] flex-col items-start justify-center gap-0.5 rounded-[14px] px-3 py-2.5 text-left ${
+      selected ? "border-[1.5px] border-brand-700 bg-brand-50 text-brand-800" : "border border-ink/[0.12] bg-white text-ink"
+    }`;
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span className="text-[13px] font-semibold text-ink">Dar créditos</span>
+      <div className="grid grid-cols-2 gap-2">
+        {packages.map((pkg) => (
+          <button key={pkg.id} onClick={() => setPackageId(pkg.id)} className={tileClass(packageId === pkg.id)}>
+            <span className="text-sm font-semibold">{pkg.name}</span>
+            <span className="text-xs opacity-75">
+              {formatMoney(pkg.price)} · {pkg.validityDays} días
+            </span>
+          </button>
+        ))}
+        <button onClick={() => setPackageId("custom")} className={tileClass(packageId === "custom")}>
+          <span className="text-sm font-semibold">Personalizado</span>
+          <span className="text-xs opacity-75">Cortesía o pase manual</span>
+        </button>
+      </div>
+
+      {packageId === "custom" && (
+        <div className="grid grid-cols-2 gap-2.5">
+          <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink">
+            Créditos
+            <input
+              type="number"
+              min={1}
+              value={customCredits}
+              onChange={(e) => setCustomCredits(Math.max(1, Number(e.target.value)))}
+              className={sheetInputClass}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink">
+            Vigencia (días)
+            <input
+              type="number"
+              min={1}
+              value={customValidityDays}
+              onChange={(e) => setCustomValidityDays(Math.max(1, Number(e.target.value)))}
+              className={sheetInputClass}
+            />
+          </label>
+        </div>
+      )}
+
+      <button
+        onClick={handleAdd}
+        disabled={submitting}
+        className="h-[50px] rounded-[14px] bg-brand-700 text-[15px] font-semibold text-white hover:bg-brand-800 disabled:opacity-50"
+      >
+        {submitting ? "Guardando..." : `Agregar ${creditAmount} ${creditAmount === 1 ? "crédito" : "créditos"}`}
+      </button>
+    </div>
+  );
 }
 
 /** Tools that only make sense for a student the studio created by hand. */
@@ -337,22 +546,21 @@ function NoAccountTools({
     });
   }
 
-  return (
-    <div className="space-y-4 border-t border-gray-100 pt-4">
-      <div>
-        <p className="text-sm font-medium text-ink">Este alumno no tiene cuenta</p>
-        <p className="text-xs text-ink-soft">
-          Lo gestionas tú desde aquí. Si ya se registró en la app, vincula su cuenta para conservar
-          reservas y créditos.
-        </p>
-      </div>
+  const amberButton =
+    "h-[42px] rounded-xl border border-amber-800/30 bg-white px-3 text-[13px] font-semibold text-amber-900 disabled:opacity-50";
 
+  return (
+    <div className="flex flex-col gap-2.5 rounded-[18px] bg-[#FEF7E6] p-4">
+      <p className="text-sm font-semibold text-amber-900">Este alumno no tiene cuenta</p>
+      <p className="text-[13px] leading-normal text-amber-800">
+        Si ya se registró en la app, vincula su cuenta para conservar reservas y créditos.
+      </p>
       <div className="flex gap-2">
         <select
           value={accountId}
           onChange={(e) => setAccountId(e.target.value)}
           aria-label="Cuenta a vincular"
-          className={inputClass}
+          className="h-[42px] min-w-0 flex-1 rounded-xl border border-amber-800/30 bg-white px-3 text-[13px] text-ink"
         >
           <option value="">Elige su cuenta registrada…</option>
           {accounts.map((a) => (
@@ -361,13 +569,12 @@ function NoAccountTools({
             </option>
           ))}
         </select>
-        <Button variant="secondary" disabled={!accountId || busy} onClick={link}>
+        <button className={amberButton} disabled={!accountId || busy} onClick={link}>
           Vincular
-        </Button>
+        </button>
       </div>
-
-      <Button
-        variant="secondary"
+      <button
+        className={amberButton}
         disabled={busy}
         onClick={() =>
           run(async () => {
@@ -381,112 +588,10 @@ function NoAccountTools({
           })
         }
       >
-        Registrar responsiva firmada en papel
-      </Button>
-
-      {message && <p className="text-sm text-green-700">{message}</p>}
+        Registrar responsiva en papel
+      </button>
+      {message && <p className="text-sm text-brand-800">{message}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
-  );
-}
-
-function AddCreditsForm({
-  tenantId,
-  studentId,
-  packages,
-}: {
-  tenantId: string;
-  studentId: string;
-  packages: PackageItem[];
-}) {
-  const [packageId, setPackageId] = useState<string>(packages[0]?.id ?? "custom");
-  const [customCredits, setCustomCredits] = useState(1);
-  const [customValidityDays, setCustomValidityDays] = useState(30);
-  const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-
-  const selectedPackage = packages.find((p) => p.id === packageId);
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    setSubmitting(true);
-    setSuccess(false);
-    try {
-      const creditAmount = selectedPackage?.creditAmount ?? customCredits;
-      const validityDays = selectedPackage?.validityDays ?? customValidityDays;
-      const expiresAt = Timestamp.fromMillis(Date.now() + validityDays * 24 * 60 * 60 * 1000);
-
-      await addDoc(collection(db, "tenants", tenantId, "studentPasses"), {
-        studentId,
-        packageId: selectedPackage?.id ?? "manual",
-        initialCredits: creditAmount,
-        remainingCredits: creditAmount,
-        expiresAt,
-        status: "active",
-      } satisfies StudentPassDoc);
-
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 2500);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-3 border-t border-gray-200 pt-4">
-      <h3 className="text-sm font-semibold text-gray-900">Dar créditos</h3>
-
-      <FormField
-        label="Paquete"
-        htmlFor={`package-${studentId}`}
-        hint="Elige uno de tus paquetes, o crea un pase personalizado"
-      >
-        <select
-          id={`package-${studentId}`}
-          value={packageId}
-          onChange={(e) => setPackageId(e.target.value)}
-          className={inputClass}
-        >
-          {packages.map((pkg) => (
-            <option key={pkg.id} value={pkg.id}>
-              {pkg.name} ({pkg.creditAmount} créditos)
-            </option>
-          ))}
-          <option value="custom">Personalizado…</option>
-        </select>
-      </FormField>
-
-      {packageId === "custom" && (
-        <div className="grid grid-cols-2 gap-3">
-          <FormField label="Créditos" htmlFor={`custom-credits-${studentId}`}>
-            <input
-              id={`custom-credits-${studentId}`}
-              type="number"
-              min={1}
-              value={customCredits}
-              onChange={(e) => setCustomCredits(Number(e.target.value))}
-              className={inputClass}
-            />
-          </FormField>
-          <FormField label="Vigencia (días)" htmlFor={`custom-validity-${studentId}`}>
-            <input
-              id={`custom-validity-${studentId}`}
-              type="number"
-              min={1}
-              value={customValidityDays}
-              onChange={(e) => setCustomValidityDays(Number(e.target.value))}
-              className={inputClass}
-            />
-          </FormField>
-        </div>
-      )}
-
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={submitting}>
-          {submitting ? "Guardando..." : "Agregar créditos"}
-        </Button>
-        {success && <span className="text-sm text-green-600">¡Listo!</span>}
-      </div>
-    </form>
   );
 }

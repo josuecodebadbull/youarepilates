@@ -1,63 +1,106 @@
 "use client";
 
-import { useState } from "react";
-import { Check, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface StudentAppLinkProps {
   slug: string;
-  /** Compact renders as a small sidebar widget; the default is the bigger dashboard card. */
-  compact?: boolean;
+  /**
+   * "sidebar": small card at the bottom of the desktop sidebar.
+   * "row": one-line row (the mobile "Más" sheet).
+   * "card": the full "Comparte tu app" card with copy + WhatsApp.
+   */
+  variant?: "sidebar" | "row" | "card";
 }
 
-export function StudentAppLink({ slug, compact = false }: StudentAppLinkProps) {
+function useStudentAppUrl(slug: string) {
+  // Resolved after mount so server and first client render match.
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
+  return `${origin}/s/${slug}`;
+}
+
+function useCopy(text: string) {
   const [copied, setCopied] = useState(false);
-  const url = typeof window !== "undefined" ? `${window.location.origin}/s/${slug}` : `/s/${slug}`;
-
-  async function handleCopy() {
-    await navigator.clipboard.writeText(url);
+  async function copy() {
+    await navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 1800);
   }
+  return { copied, copy, label: copied ? "¡Copiado!" : "Copiar link" };
+}
 
-  if (compact) {
+export function StudentAppLink({ slug, variant = "card" }: StudentAppLinkProps) {
+  const url = useStudentAppUrl(slug);
+  const { copy, label } = useCopy(url);
+
+  if (variant === "sidebar") {
     return (
-      <div className="mt-4 rounded-md border border-gray-200 bg-white p-2.5">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
-          App de alumnos
-        </p>
-        <div className="mt-1 flex items-center gap-1">
-          <code className="flex-1 truncate text-xs text-gray-600">/s/{slug}</code>
+      <div className="flex flex-col gap-2.5 rounded-2xl bg-brand-50 p-3.5">
+        <p className="text-xs font-semibold text-brand-800">App de alumnos</p>
+        <code className="truncate font-mono text-xs font-medium text-brand-700">/s/{slug}</code>
+        <div className="flex gap-1.5">
           <button
-            onClick={handleCopy}
-            title="Copiar link"
-            className="shrink-0 rounded px-1.5 py-0.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            onClick={copy}
+            className="h-[34px] flex-1 rounded-[10px] bg-brand-700 text-xs font-semibold text-white hover:bg-brand-800"
           >
-            {copied ? <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> : "Copiar"}
+            {label}
           </button>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex h-[34px] items-center rounded-[10px] bg-white px-3 text-xs font-semibold text-brand-800 hover:text-brand-700"
+          >
+            Abrir
+          </a>
         </div>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"
-        >
-          Abrir en pestaña nueva <ExternalLink className="h-3 w-3" strokeWidth={2} />
-        </a>
       </div>
     );
   }
 
+  if (variant === "row") {
+    return (
+      <div className="flex items-center justify-between gap-2.5 rounded-2xl bg-brand-50 p-3.5">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-brand-800">App de alumnos</p>
+          <code className="block truncate font-mono text-xs font-medium text-brand-700">/s/{slug}</code>
+        </div>
+        <button
+          onClick={copy}
+          className="h-10 shrink-0 rounded-xl bg-brand-700 px-3.5 text-[13px] font-semibold text-white hover:bg-brand-800"
+        >
+          {label}
+        </button>
+      </div>
+    );
+  }
+
+  const whatsappHref = `https://wa.me/?text=${encodeURIComponent(`Reserva tus clases aquí: ${url}`)}`;
+
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-      <code className="flex-1 truncate rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm text-indigo-900">
-        {url}
+    <section className="flex flex-col gap-3 rounded-[22px] border border-ink/[0.08] bg-white p-5">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-xl font-semibold text-ink">Comparte tu app</h2>
+        <p className="text-[13px] leading-normal text-ink-soft">
+          Tus alumnos reservan, compran paquetes y firman la responsiva desde este link.
+        </p>
+      </div>
+      <code className="flex h-11 items-center truncate rounded-xl bg-[#F3F2EE] px-3.5 font-mono text-[13px] font-medium text-ink">
+        {url.replace(/^https?:\/\//, "")}
       </code>
-      <button
-        onClick={handleCopy}
-        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-      >
-        {copied ? "¡Copiado!" : "Copiar link"}
-      </button>
-    </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={copy} className="h-11 rounded-xl bg-ink text-sm font-semibold text-white hover:bg-black">
+          {label}
+        </button>
+        <a
+          href={whatsappHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-11 items-center justify-center rounded-xl border border-ink/[0.14] bg-white text-center text-sm font-semibold text-ink hover:bg-[#F7F6F3]"
+        >
+          Enviar por WhatsApp
+        </a>
+      </div>
+    </section>
   );
 }

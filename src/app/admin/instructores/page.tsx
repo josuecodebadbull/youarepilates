@@ -3,19 +3,17 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { addDoc, collection, doc, onSnapshot, orderBy, query, updateDoc } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { Pencil, Users } from "lucide-react";
 
 import { db, storage } from "@/lib/firebase/client";
 import { optimizeImage } from "@/lib/optimizeImage";
 import { useTenant } from "@/lib/tenant/TenantProvider";
+import { initials, useWeekClassCounts } from "@/lib/admin/data";
 import type { InstructorDoc } from "@/lib/types/firestore";
-import { Avatar } from "@/components/ui/Avatar";
-import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { FileInput } from "@/components/ui/FileInput";
-import { FormField, inputClass } from "@/components/ui/FormField";
+import { sheetInputClass } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { useToast } from "@/components/admin/Toast";
+import { AddTile, PrimaryAction, SheetFooter, Switch, fieldLabelClass, textareaClass } from "@/components/admin/ui";
 
 interface Instructor extends InstructorDoc {
   id: string;
@@ -28,16 +26,12 @@ export default function InstructoresPage() {
   // `undefined` = closed, `null` = creating, an instructor = editing them.
   const [dialog, setDialog] = useState<Instructor | null | undefined>(undefined);
   const closeDialog = useCallback(() => setDialog(undefined), []);
+  const { byInstructor } = useWeekClassCounts(tenantId);
 
   useEffect(() => {
-    const instructorsQuery = query(
-      collection(db, "tenants", tenantId, "instructors"),
-      orderBy("name"),
-    );
+    const instructorsQuery = query(collection(db, "tenants", tenantId, "instructors"), orderBy("name"));
     return onSnapshot(instructorsQuery, (snapshot) => {
-      setInstructors(
-        snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as InstructorDoc) })),
-      );
+      setInstructors(snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as InstructorDoc) })));
       setLoaded(true);
     });
   }, [tenantId]);
@@ -46,105 +40,92 @@ export default function InstructoresPage() {
     <div>
       <PageHeader
         title="Instructores"
-        description="Los coaches que dan clases en tu estudio. Cada horario que programes se asigna a uno de ellos, y ellos ven en su propia vista solo las clases que les tocan."
-        action={<Button onClick={() => setDialog(null)}>+ Agregar instructor</Button>}
+        description="Cada clase se asigna a uno de ellos; cada uno ve solo las clases que le tocan."
+        action={<PrimaryAction onClick={() => setDialog(null)}>Nuevo instructor</PrimaryAction>}
       />
 
-      {dialog !== undefined && (
-        <Modal title={dialog ? "Editar instructor" : "Nuevo instructor"} onClose={closeDialog}>
-          <InstructorForm tenantId={tenantId} instructor={dialog ?? undefined} onDone={closeDialog} />
-        </Modal>
-      )}
-
-      {loaded && instructors.length === 0 ? (
-        <EmptyState
-          icon={<Users className="h-7 w-7" strokeWidth={1.75} />}
-          title="Todavía no tienes instructores"
-          description="Agrega a tu primer coach para poder asignarlo a los horarios."
-          action={<Button onClick={() => setDialog(null)}>+ Agregar mi primer instructor</Button>}
-        />
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {instructors.map((instructor) => (
-            <div
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3.5">
+        {instructors.map((instructor) => {
+          const count = byInstructor[instructor.id] ?? 0;
+          return (
+            <button
               key={instructor.id}
-              className={`flex items-start gap-4 rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-md ${
-                instructor.active ? "" : "opacity-70"
+              onClick={() => setDialog(instructor)}
+              className={`flex flex-col gap-3.5 rounded-[22px] border border-ink/[0.08] bg-white p-5 text-left text-ink transition-colors hover:border-ink/[0.16] ${
+                instructor.active ? "" : "opacity-60"
               }`}
             >
-              <Avatar name={instructor.name} photoUrl={instructor.photoUrl} size={56} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="truncate font-medium text-gray-900">{instructor.name}</p>
-                  {!instructor.active && (
-                    <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
-                      Inactivo
-                    </span>
-                  )}
-                </div>
-                {instructor.bio ? (
-                  <BioText text={instructor.bio} />
-                ) : (
-                  <button
-                    onClick={() => setDialog(instructor)}
-                    className="mt-1 text-sm text-gray-400 hover:text-brand-700"
+              <div className="flex items-center gap-3.5">
+                <InstructorAvatar name={instructor.name} photoUrl={instructor.photoUrl} active={instructor.active} size={56} />
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="truncate text-base font-bold">{instructor.name}</span>
+                  <span
+                    className={`self-start rounded-full px-[9px] py-0.5 text-[11px] font-bold ${
+                      instructor.active ? "bg-brand-50 text-brand-700" : "bg-[#F3F2EE] text-ink-soft"
+                    }`}
                   >
-                    Agregar una bio
-                  </button>
-                )}
+                    {instructor.active ? "Activo" : "Inactivo"}
+                  </span>
+                </div>
               </div>
-              <button
-                onClick={() => setDialog(instructor)}
-                aria-label={`Editar ${instructor.name}`}
-                className="-mr-2 -mt-1 shrink-0 rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-        </div>
+              <p className="line-clamp-3 whitespace-pre-line text-[13px] leading-[1.55] text-ink-soft">
+                {instructor.bio || "Sin bio todavía — toca para agregarla."}
+              </p>
+              <div className="mt-auto flex justify-between border-t border-ink/[0.06] pt-3 text-[13px]">
+                <span className="text-ink-soft">Esta semana</span>
+                <span className="font-bold">
+                  {instructor.active ? `${count} ${count === 1 ? "clase" : "clases"}` : "—"}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+        {loaded && (
+          <AddTile
+            label={instructors.length === 0 ? "Agrega tu primer instructor" : "Nuevo instructor"}
+            onClick={() => setDialog(null)}
+            className="min-h-[200px]"
+          />
+        )}
+      </div>
+
+      {dialog !== undefined && (
+        <InstructorSheet tenantId={tenantId} instructor={dialog ?? undefined} onDone={closeDialog} />
       )}
     </div>
   );
 }
 
-/**
- * Long bios collapse to four lines with a "Ver más" toggle — shown only when the text
- * actually overflows — and keep the author's line breaks so paragraphs stay readable.
- */
-function BioText({ text }: { text: string }) {
-  const ref = useRef<HTMLParagraphElement>(null);
-  const [expanded, setExpanded] = useState(false);
-  const [overflows, setOverflows] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (el && !expanded) setOverflows(el.scrollHeight > el.clientHeight + 1);
-  }, [text, expanded]);
-
+function InstructorAvatar({
+  name,
+  photoUrl,
+  active,
+  size,
+}: {
+  name: string;
+  photoUrl: string | null;
+  active: boolean;
+  size: number;
+}) {
+  if (photoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={photoUrl} alt="" className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />
+    );
+  }
   return (
-    <div className="mt-1.5">
-      <p
-        ref={ref}
-        className={`whitespace-pre-line break-words text-sm leading-relaxed text-gray-600 ${
-          expanded ? "" : "line-clamp-4"
-        }`}
-      >
-        {text}
-      </p>
-      {(overflows || expanded) && (
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-1 text-xs font-medium text-brand-700 hover:underline"
-        >
-          {expanded ? "Ver menos" : "Ver más"}
-        </button>
-      )}
-    </div>
+    <span
+      className={`flex shrink-0 items-center justify-center rounded-full font-bold ${
+        active ? "bg-brand-50 text-brand-800" : "bg-[#F3F2EE] text-ink-soft"
+      }`}
+      style={{ width: size, height: size, fontSize: size * 0.32 }}
+    >
+      {initials(name || "?")}
+    </span>
   );
 }
 
-function InstructorForm({
+function InstructorSheet({
   tenantId,
   instructor,
   onDone,
@@ -153,6 +134,8 @@ function InstructorForm({
   instructor?: Instructor;
   onDone: () => void;
 }) {
+  const toast = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(instructor?.name ?? "");
   const [bio, setBio] = useState(instructor?.bio ?? "");
   const [active, setActive] = useState(instructor?.active ?? true);
@@ -201,6 +184,7 @@ function InstructorForm({
       }
 
       if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+      toast(instructor ? "Cambios guardados" : "Instructor agregado");
       onDone();
     } catch {
       setError("No se pudo guardar. Revisa tu conexión e intenta de nuevo.");
@@ -209,91 +193,89 @@ function InstructorForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="flex items-center gap-4">
-        <Avatar name={name || "?"} photoUrl={currentPhotoUrl} size={72} />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-ink">Foto de perfil</p>
-          <p className="text-xs text-ink-soft">Opcional. Sin foto se muestra un avatar con sus iniciales.</p>
-          {currentPhotoUrl && (
-            <button
-              type="button"
-              onClick={() => {
-                handlePhotoChange(null);
-                setRemovePhoto(true);
-              }}
-              className="mt-1 text-xs font-medium text-red-600 hover:underline"
-            >
-              Quitar foto
-            </button>
-          )}
+    <Modal
+      title={instructor ? "Editar instructor" : "Nuevo instructor"}
+      subtitle="Tus alumnos lo verán al elegir una clase"
+      onClose={onDone}
+      footer={
+        <SheetFooter
+          formId="instructor-form"
+          onCancel={onDone}
+          submitting={submitting}
+          label={instructor ? "Guardar cambios" : "Agregar instructor"}
+        />
+      }
+    >
+      <form id="instructor-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex items-center gap-3.5">
+          <InstructorAvatar name={name} photoUrl={currentPhotoUrl} active size={72} />
+          <div className="flex flex-col gap-1.5">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="h-10 rounded-xl border border-ink/[0.14] bg-white px-3.5 text-[13px] font-semibold text-ink"
+              >
+                {currentPhotoUrl ? "Cambiar foto" : "Subir foto"}
+              </button>
+              {currentPhotoUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handlePhotoChange(null);
+                    setRemovePhoto(true);
+                  }}
+                  className="h-10 px-2 text-[13px] font-semibold text-[#B42318]"
+                >
+                  Quitar
+                </button>
+              )}
+            </div>
+            <span className="text-xs text-ink-faint">Sin foto se muestran sus iniciales.</span>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => handlePhotoChange(e.target.files?.[0] ?? null)}
+          />
         </div>
-      </div>
-      <FileInput
-        id="instructor-photo"
-        accept="image/*"
-        onChange={handlePhotoChange}
-        buttonLabel={currentPhotoUrl ? "Cambiar foto" : "Subir foto"}
-      />
 
-      <FormField
-        label="Nombre completo"
-        htmlFor="instructor-name"
-        hint="Como lo verán tus alumnos al elegir una clase"
-        required
-      >
-        <input
-          id="instructor-name"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Ana Torres"
-          className={inputClass}
-        />
-      </FormField>
+        <label className={fieldLabelClass}>
+          Nombre completo
+          <input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ana Torres"
+            className={sheetInputClass}
+          />
+        </label>
 
-      <FormField
-        label="Bio"
-        htmlFor="instructor-bio"
-        hint="Opcional — su experiencia y formación. Puedes separar párrafos con Enter"
-      >
-        <textarea
-          id="instructor-bio"
-          rows={8}
-          maxLength={2000}
-          value={bio}
-          onChange={(e) => setBio(e.target.value)}
-          placeholder="Instructora certificada en Reformer con 5 años de experiencia..."
-          className={`${inputClass} min-h-[10rem] resize-y leading-relaxed`}
-        />
-        <p className="mt-1 text-right text-xs text-gray-400">{bio.length}/2000</p>
-      </FormField>
+        <label className={fieldLabelClass}>
+          Bio
+          <textarea
+            rows={6}
+            maxLength={2000}
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Formación, certificaciones y estilo de clase"
+            className={textareaClass}
+          />
+          <span className="text-right text-xs font-normal text-ink-faint">{bio.length}/2000</span>
+        </label>
 
-      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3">
-        <input
-          type="checkbox"
-          checked={active}
-          onChange={(e) => setActive(e.target.checked)}
-          className="mt-0.5 h-4 w-4"
-        />
-        <span>
-          <span className="block text-sm font-medium text-ink">Instructor activo</span>
-          <span className="block text-xs text-ink-soft">
-            Desmárcalo si ya no da clases en tu estudio. Conserva su historial.
-          </span>
-        </span>
-      </label>
+        <div className="flex items-center justify-between gap-3 rounded-2xl bg-[#F3F2EE] p-3.5">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-semibold text-ink">Activo</span>
+            <span className="text-xs text-ink-soft">Desactívalo si ya no da clases. Conserva su historial.</span>
+          </div>
+          <Switch checked={active} onChange={setActive} label="Activo" />
+        </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
-        <Button type="button" variant="secondary" onClick={onDone}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={submitting}>
-          {submitting ? "Guardando..." : instructor ? "Guardar cambios" : "Guardar instructor"}
-        </Button>
-      </div>
-    </form>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+      </form>
+    </Modal>
   );
 }

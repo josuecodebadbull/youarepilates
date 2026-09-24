@@ -1,7 +1,13 @@
 "use client";
 
 import { type FirebaseApp, getApps, initializeApp } from "firebase/app";
-import { type Auth, getAuth } from "firebase/auth";
+import {
+  type Auth,
+  browserLocalPersistence,
+  getAuth,
+  indexedDBLocalPersistence,
+  initializeAuth,
+} from "firebase/auth";
 import {
   type Firestore,
   initializeFirestore,
@@ -29,7 +35,25 @@ function getFirebaseApp(): FirebaseApp {
 }
 
 export const app: FirebaseApp = getFirebaseApp();
-export const auth: Auth = getAuth(app);
+
+/**
+ * Explicit long-lived persistence (IndexedDB, falling back to localStorage) so admin
+ * and student sessions survive tab closes, reloads and PWA restarts. Firebase keeps
+ * the refresh token, so the user only signs in again after an explicit sign-out.
+ */
+function getFirebaseAuth(): Auth {
+  if (typeof window === "undefined") return getAuth(app);
+  try {
+    return initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+    });
+  } catch {
+    // Already initialized (hot reload / second import).
+    return getAuth(app);
+  }
+}
+
+export const auth: Auth = getFirebaseAuth();
 
 /**
  * Firestore's own IndexedDB persistence (not the service worker) is what makes the

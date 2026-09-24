@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { Search, UserPlus, X } from "lucide-react";
 
@@ -9,12 +9,14 @@ import { db, functions } from "@/lib/firebase/client";
 import type {
   BookingDoc,
   ClassTypeDoc,
+  RoomDoc,
   InstructorDoc,
   ScheduleDoc,
   StudentPassDoc,
   UserDoc,
   WaitlistEntryDoc,
 } from "@/lib/types/firestore";
+import { initials } from "@/lib/admin/data";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -123,6 +125,17 @@ export function ClassRosterModal({
     );
   }, [tenantId]);
 
+  const [room, setRoom] = useState<RoomDoc | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getDoc(doc(db, "tenants", tenantId, "branches", schedule.branchId, "rooms", schedule.roomId)).then((snap) => {
+      if (!cancelled) setRoom(snap.exists() ? (snap.data() as RoomDoc) : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId, schedule.branchId, schedule.roomId]);
+
   const studentsById = useMemo(
     () => Object.fromEntries(students.map((s) => [s.id, s])),
     [students],
@@ -130,30 +143,87 @@ export function ClassRosterModal({
   const confirmed = bookings.filter((b) => b.status === "confirmed");
   const bookedIds = new Set(confirmed.map((b) => b.studentId));
   const isPast = schedule.startAt.toMillis() < Date.now();
-  const title = `${classType?.name ?? "Clase"} · ${schedule.startAt
-    .toDate()
-    .toLocaleString("es-MX", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`;
+  const start = schedule.startAt.toDate();
+  const timeOpts = { hour: "2-digit", minute: "2-digit", hour12: false } as const;
+  const dayLabel = start.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "short" });
+  const subtitle = [
+    dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1),
+    `${start.toLocaleTimeString("es-MX", timeOpts)}–${schedule.endAt.toDate().toLocaleTimeString("es-MX", timeOpts)}`,
+    instructor?.name,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const bookingBySpot = new Map(
+    confirmed.filter((b) => b.spotNumber !== null).map((b) => [b.spotNumber as number, b]),
+  );
+  const spots = room
+    ? [...room.spots].sort((a, b) => a.spotNumber - b.spotNumber).map((sp) => ({
+        n: sp.spotNumber,
+        blocked: room.blockedSpots.includes(sp.spotNumber),
+      }))
+    : Array.from({ length: schedule.capacity }, (_, i) => ({ n: i + 1, blocked: false }));
+  const canBook = !isPast && schedule.status === "scheduled";
 
   return (
-    <Modal title={title} onClose={onClose}>
-      <div className="space-y-5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-gray-600">
-            {instructor ? `${instructor.name} · ` : ""}
-            <span className="font-medium text-gray-900">
-              {schedule.bookedCount}/{schedule.capacity}
-            </span>{" "}
-            lugares ocupados
-          </p>
-          {!adding && !isPast && schedule.status === "scheduled" && (
-            <Button className="px-3 py-1.5 text-xs" onClick={() => setAdding(true)}>
-              <UserPlus className="mr-1 inline h-4 w-4" /> Inscribir alumno
-            </Button>
-          )}
+    <Modal
+      title={classType?.name ?? "Clase"}
+      subtitle={subtitle}
+      onClose={onClose}
+      footer={
+        canBook && !adding ? (
+          <>
+            <button
+              onClick={onClose}
+              className="h-[50px] rounded-[14px] border border-ink/[0.14] bg-white px-[18px] text-[15px] font-semibold text-ink"
+            >
+              Cerrar
+            </button>
+            <button
+              onClick={() => setAdding(true)}
+              className="flex h-[50px] flex-1 items-center justify-center gap-2 rounded-[14px] bg-ink text-[15px] font-semibold text-white"
+            >
+              <UserPlus className="h-[18px] w-[18px]" />
+              Inscribir alumno
+            </button>
+          </>
+        ) : undefined
+      }
+    >
+      <div className="flex flex-col gap-[18px]">
+        <div className="flex flex-col gap-2.5">
+          <div className="flex justify-between text-[13px]">
+            <span className="font-semibold text-ink">Mapa de camas</span>
+            <span className="text-ink-soft">
+              {schedule.bookedCount} de {schedule.capacity} ocupadas
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {spots.map(({ n, blocked }) => {
+              const booking = bookingBySpot.get(n);
+              const student = booking ? studentsById[booking.studentId] : undefined;
+              const label = blocked ? "—" : booking ? initials(student?.displayName || student?.email || "?") : "Libre";
+              return (
+                <div
+                  key={n}
+                  title={student?.displayName}
+                  className={`flex h-[58px] flex-col items-center justify-center gap-0.5 rounded-[14px] ${
+                    blocked
+                      ? "bg-[#F3F2EE] text-[#B5B3AD]"
+                      : booking
+                        ? "bg-ink text-white"
+                        : "border-[1.5px] border-dashed border-brand-300 bg-white text-brand-700"
+                  }`}
+                >
+                  <span className="text-[11px] opacity-70">Cama {n}</span>
+                  <span className="text-sm font-bold">{label}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {notice && (
-          <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">{notice}</p>
+          <p className="rounded-xl bg-brand-50 px-3 py-2 text-sm font-medium text-brand-800">{notice}</p>
         )}
 
         {adding && (
@@ -171,23 +241,23 @@ export function ClassRosterModal({
         )}
 
         <section>
-          <h3 className="mb-2 text-sm font-semibold text-gray-900">Inscritos ({confirmed.length})</h3>
+          <h3 className="mb-2 text-[13px] font-semibold text-ink">Inscritos ({confirmed.length})</h3>
           {confirmed.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-gray-300 p-4 text-center text-sm text-gray-500">
+            <p className="rounded-2xl border-[1.5px] border-dashed border-ink/15 p-4 text-center text-sm text-ink-soft">
               Nadie inscrito todavía.
             </p>
           ) : (
-            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+            <ul className="divide-y divide-ink/[0.06] overflow-hidden rounded-2xl border border-ink/[0.08]">
               {confirmed.map((booking) => {
                 const student = studentsById[booking.studentId];
                 return (
-                  <li key={booking.id} className="flex items-center gap-3 p-3">
-                    <Avatar name={student?.displayName || student?.email || "?"} />
+                  <li key={booking.id} className="flex items-center gap-2.5 px-3 py-2.5">
+                    <Avatar name={student?.displayName || student?.email || "?"} size={36} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900">
+                      <p className="truncate text-sm font-semibold text-ink">
                         {student?.displayName || student?.email || "Alumno"}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-ink-soft">
                         {booking.spotNumber !== null ? `Cama ${booking.spotNumber}` : "Sin cama asignada"}
                         {booking.overrides && booking.overrides.length > 0 &&
                           ` · cortesía (${booking.overrides.map((o) => OVERRIDE_LABELS[o] ?? o).join(", ")})`}
@@ -195,7 +265,7 @@ export function ClassRosterModal({
                     </div>
                     <Button
                       variant="secondary"
-                      className="px-3 py-1.5 text-xs"
+                      className="h-[34px] rounded-[10px] px-3 py-0 text-xs"
                       onClick={() => setCancelTarget(booking)}
                     >
                       Cancelar
@@ -209,16 +279,18 @@ export function ClassRosterModal({
 
         {waitlist.length > 0 && (
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-gray-900">
+            <h3 className="mb-2 text-[13px] font-semibold text-ink">
               Lista de espera ({waitlist.length})
             </h3>
-            <ol className="divide-y divide-gray-100 rounded-lg border border-gray-200 text-sm">
+            <ol className="flex flex-col gap-2 text-sm">
               {waitlist.map((entry, index) => {
                 const student = studentsById[entry.studentId];
                 return (
-                  <li key={entry.id} className="flex items-center gap-3 p-3">
-                    <span className="w-5 text-xs text-gray-400">{index + 1}</span>
-                    <span className="text-gray-900">
+                  <li key={entry.id} className="flex items-center gap-2.5 rounded-[14px] bg-[#FEF7E6] px-3 py-2.5">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-800 text-[11px] font-bold text-white">
+                      {index + 1}
+                    </span>
+                    <span className="font-semibold text-ink">
                       {student?.displayName || student?.email || "Alumno"}
                     </span>
                   </li>
