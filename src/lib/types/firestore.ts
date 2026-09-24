@@ -142,6 +142,10 @@ export interface BookingDoc {
   passUsedId: string;
   createdAt: Timestamp;
   canceledAt: Timestamp | null;
+  /** Set when staff booked on the student's behalf. */
+  bookedBy?: string;
+  /** Restrictions the admin knowingly bypassed (e.g. "no_credits", "waiver", "advanced_level"). */
+  overrides?: string[];
 }
 
 export interface WaitlistEntryDoc {
@@ -184,6 +188,8 @@ export interface UserDoc {
   emergencyContact: EmergencyContact | null;
   /** Count of attended basic-level classes, used by the advanced-class gating rule. */
   validatedBasicClasses: number;
+  /** `false` for a profile the studio created by hand (no Firebase Auth user yet). Absent = real account. */
+  hasAccount?: boolean;
 }
 
 /** One immutable record per signature — the audit trail proving a student accepted a

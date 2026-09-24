@@ -21,6 +21,9 @@ export async function generateMetadata({
   return {
     title: tenant.data.name,
     manifest: `/s/${params.tenantSlug}/manifest.webmanifest`,
+    // iOS ignores manifest icons and uses this for "Agregar a inicio".
+    icons: { apple: "/icons/apple-touch-icon.png" },
+    appleWebApp: { capable: true, title: tenant.data.name, statusBarStyle: "default" },
   };
 }
 

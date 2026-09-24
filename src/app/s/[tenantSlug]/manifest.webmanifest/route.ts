@@ -14,6 +14,8 @@ export async function GET(
   const manifest = {
     name: tenant.data.name,
     short_name: tenant.data.name,
+    id: `/s/${params.tenantSlug}`,
+    lang: "es",
     start_url: `/s/${params.tenantSlug}`,
     scope: `/s/${params.tenantSlug}`,
     display: "standalone",
@@ -21,8 +23,9 @@ export async function GET(
     background_color: "#ffffff",
     theme_color: tenant.data.branding.primaryHex,
     icons: [
-      { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 

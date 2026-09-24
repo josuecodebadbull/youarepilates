@@ -17,11 +17,26 @@ interface BookClassSessionInput {
   scheduleId: string;
   /** Optional: the student's preferred bed/reformer. Omit for automatic assignment. */
   spotNumber?: number;
+  /** Staff/owner only: the student being booked. Students always book for themselves. */
+  studentId?: string;
+  /**
+   * Staff/owner only: skip the student-facing restrictions (no credits, waiver unsigned,
+   * advanced level not unlocked). Without it, those come back as an `overridable` error so
+   * the admin UI can ask for confirmation first.
+   */
+  override?: boolean;
 }
 
 interface BookClassSessionResult {
   bookingId: string;
   status: "confirmed" | "waitlisted";
+  /** Restrictions that were skipped because the admin confirmed the override. */
+  overridden: string[];
+}
+
+/** A restriction an admin may knowingly bypass; `details.overridable` lets the UI offer that. */
+function overridableError(message: string): HttpsError {
+  return new HttpsError("failed-precondition", message, { overridable: true });
 }
 
 /**
@@ -32,8 +47,8 @@ interface BookClassSessionResult {
  * transacción con datos frescos y verá `bookedCount === capacity`).
  */
 export const bookClassSession = onCall<BookClassSessionInput>(async (request) => {
-  const claims = requireRole(request, "student");
-  const { scheduleId, spotNumber } = request.data ?? ({} as BookClassSessionInput);
+  const claims = requireRole(request, "student", "staff", "tenant_owner");
+  const { scheduleId, spotNumber, override = false } = request.data ?? ({} as BookClassSessionInput);
   if (!scheduleId) {
     throw new HttpsError("invalid-argument", "scheduleId es requerido.");
   }
@@ -43,7 +58,13 @@ export const bookClassSession = onCall<BookClassSessionInput>(async (request) =>
     throw new HttpsError("failed-precondition", "Tu cuenta no está ligada a un estudio.");
   }
 
-  const studentId = request.auth!.uid;
+  const isStaffBooking = claims.role !== "student";
+  const studentId = isStaffBooking ? request.data.studentId : request.auth!.uid;
+  if (!studentId) {
+    throw new HttpsError("invalid-argument", "studentId es requerido.");
+  }
+  const canOverride = isStaffBooking && override;
+  const overridden: string[] = [];
   const tenantRef = adminDb.collection("tenants").doc(tenantId);
   const scheduleRef = tenantRef.collection("schedules").doc(scheduleId);
 
@@ -59,6 +80,12 @@ export const bookClassSession = onCall<BookClassSessionInput>(async (request) =>
 
     const tenant = tenantSnap.data() as TenantDoc;
 
+    const userSnap = await tx.get(adminDb.collection("users").doc(studentId));
+    const user = userSnap.data() as UserDoc | undefined;
+    if (isStaffBooking && (user?.tenantId !== tenantId || user?.role !== "student")) {
+      throw new HttpsError("not-found", "El alumno no pertenece a este estudio.");
+    }
+
     // Carta responsiva firmada — verificación real, no solo en el cliente: sin esto
     // cualquiera podría saltarse la firma llamando la función directamente. Un tenant
     // creado antes de esta funcionalidad no tiene `waiver` todavía, lo cual equivale a
@@ -73,10 +100,14 @@ export const bookClassSession = onCall<BookClassSessionInput>(async (request) =>
           .limit(1),
       );
       if (signatureSnap.empty) {
-        throw new HttpsError(
-          "failed-precondition",
-          "Debes firmar la carta responsiva antes de reservar. Ve a tu Perfil.",
-        );
+        if (!isStaffBooking) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Debes firmar la carta responsiva antes de reservar. Ve a tu Perfil.",
+          );
+        }
+        if (!canOverride) throw overridableError("El alumno no ha firmado la carta responsiva.");
+        overridden.push("waiver");
       }
     }
 
@@ -99,14 +130,15 @@ export const bookClassSession = onCall<BookClassSessionInput>(async (request) =>
     const classType = classTypeSnap.data() as ClassTypeDoc;
 
     if (classType.level === "avanzado") {
-      const userSnap = await tx.get(adminDb.collection("users").doc(studentId));
-      const user = userSnap.data() as UserDoc | undefined;
       const validated = user?.validatedBasicClasses ?? 0;
       if (validated < tenant.settings.minBasicClassesForAdvanced) {
-        throw new HttpsError(
-          "failed-precondition",
-          `Necesitas al menos ${tenant.settings.minBasicClassesForAdvanced} clases básicas validadas por un coach para tomar esta clase.`,
-        );
+        const message = isStaffBooking
+          ? `El alumno tiene ${validated} de ${tenant.settings.minBasicClassesForAdvanced} clases básicas validadas para tomar una clase avanzada.`
+          : `Necesitas al menos ${tenant.settings.minBasicClassesForAdvanced} clases básicas validadas por un coach para tomar esta clase.`;
+        if (!canOverride) {
+          throw isStaffBooking ? overridableError(message) : new HttpsError("failed-precondition", message);
+        }
+        overridden.push("advanced_level");
       }
     }
 
@@ -120,7 +152,7 @@ export const bookClassSession = onCall<BookClassSessionInput>(async (request) =>
         createdAt: Timestamp.now(),
       } satisfies WaitlistEntryDoc);
       tx.update(scheduleRef, { waitlistCount: schedule.waitlistCount + 1 });
-      return { bookingId: waitlistRef.id, status: "waitlisted" };
+      return { bookingId: waitlistRef.id, status: "waitlisted", overridden };
     }
 
     let confirmedSpotNumber: number | null = null;
@@ -161,16 +193,22 @@ export const bookClassSession = onCall<BookClassSessionInput>(async (request) =>
     });
 
     if (!validPassDoc) {
-      throw new HttpsError("failed-precondition", "No tienes créditos suficientes o vigentes.");
+      if (!isStaffBooking) {
+        throw new HttpsError("failed-precondition", "No tienes créditos suficientes o vigentes.");
+      }
+      if (!canOverride) throw overridableError("El alumno no tiene créditos suficientes o vigentes.");
+      overridden.push("no_credits");
     }
 
-    const pass = validPassDoc.data() as StudentPassDoc;
-    const remainingCredits = pass.remainingCredits - classType.requiredCredits;
-
-    tx.update(validPassDoc.ref, {
-      remainingCredits,
-      status: remainingCredits === 0 ? "depleted" : "active",
-    });
+    // A courtesy booking with no pass charges nothing (and so has nothing to refund later).
+    if (validPassDoc) {
+      const pass = validPassDoc.data() as StudentPassDoc;
+      const remainingCredits = pass.remainingCredits - classType.requiredCredits;
+      tx.update(validPassDoc.ref, {
+        remainingCredits,
+        status: remainingCredits === 0 ? "depleted" : "active",
+      });
+    }
     tx.update(scheduleRef, {
       bookedCount: schedule.bookedCount + 1,
       ...(confirmedSpotNumber !== null
@@ -184,12 +222,13 @@ export const bookClassSession = onCall<BookClassSessionInput>(async (request) =>
       studentId,
       spotNumber: confirmedSpotNumber,
       status: "confirmed",
-      passUsedId: validPassDoc.id,
+      passUsedId: validPassDoc?.id ?? "",
       createdAt: now,
       canceledAt: null,
+      ...(isStaffBooking ? { bookedBy: request.auth!.uid, overrides: overridden } : {}),
     } satisfies BookingDoc);
 
-    return { bookingId: bookingRef.id, status: "confirmed" };
+    return { bookingId: bookingRef.id, status: "confirmed", overridden };
   });
 
   return result;

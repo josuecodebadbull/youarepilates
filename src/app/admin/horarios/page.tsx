@@ -23,6 +23,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { FormField, inputClass } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ClassRosterModal } from "@/components/admin/ClassRosterModal";
 import { WeekCalendar } from "@/components/admin/WeekCalendar";
 
 interface Schedule extends ScheduleDoc {
@@ -71,6 +72,7 @@ export default function HorariosPage() {
   const [view, setView] = useState<"calendar" | "list">("calendar");
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [weekSchedules, setWeekSchedules] = useState<Schedule[]>([]);
+  const [rosterScheduleId, setRosterScheduleId] = useState<string | null>(null);
 
   // The week grid needs real width to be usable — default to the list on phones
   // instead of handing them a calendar that only works by scrolling sideways.
@@ -139,6 +141,11 @@ export default function HorariosPage() {
     [instructors],
   );
 
+  // Looked up live so the roster header (bookedCount) updates as bookings change.
+  const rosterSchedule = rosterScheduleId
+    ? [...weekSchedules, ...schedules].find((s) => s.id === rosterScheduleId)
+    : undefined;
+
   function openForm(prefill: SlotPrefill | null) {
     setSlotPrefill(prefill);
     setFormOpen(true);
@@ -182,12 +189,23 @@ export default function HorariosPage() {
             tenantId={tenantId}
             branches={branches}
             classTypes={classTypes}
-            instructors={instructors}
+            instructors={instructors.filter((i) => i.active)}
             existingSchedules={schedules}
             prefill={slotPrefill}
             onDone={() => setFormOpen(false)}
           />
         </Modal>
+      )}
+
+      {rosterSchedule && (
+        <ClassRosterModal
+          tenantId={tenantId}
+          scheduleId={rosterSchedule.id}
+          schedule={rosterSchedule}
+          classType={classTypesById[rosterSchedule.classTypeId]}
+          instructor={instructorsById[rosterSchedule.instructorId]}
+          onClose={() => setRosterScheduleId(null)}
+        />
       )}
 
       {loaded && schedules.length === 0 && !missingPrerequisite ? (
@@ -225,6 +243,7 @@ export default function HorariosPage() {
               onPrevWeek={() => setWeekStart((d) => shiftDays(d, -7))}
               onNextWeek={() => setWeekStart((d) => shiftDays(d, 7))}
               onToday={() => setWeekStart(getMonday(new Date()))}
+              onScheduleClick={(schedule) => setRosterScheduleId(schedule.id)}
               onSlotClick={
                 missingPrerequisite
                   ? undefined
@@ -246,7 +265,11 @@ export default function HorariosPage() {
                   const classType = classTypesById[schedule.classTypeId];
                   const instructor = instructorsById[schedule.instructorId];
                   return (
-                    <li key={schedule.id} className="flex items-center justify-between p-4">
+                    <li
+                      key={schedule.id}
+                      onClick={() => setRosterScheduleId(schedule.id)}
+                      className="flex cursor-pointer items-center justify-between p-4 hover:bg-gray-50"
+                    >
                       <div>
                         <p className="font-medium text-gray-900">
                           {classType?.name ?? "Clase"}

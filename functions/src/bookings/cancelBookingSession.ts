@@ -2,11 +2,13 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 import { adminDb, Timestamp } from "../lib/admin";
 import { requireRole } from "../lib/authz";
-import type { BookingDoc, ScheduleDoc, StudentPassDoc, TenantDoc } from "../lib/types";
+import type { BookingDoc, ClassTypeDoc, ScheduleDoc, StudentPassDoc, TenantDoc } from "../lib/types";
 import { promoteNextWaitlistEntry } from "../waitlist/promoteWaitlist";
 
 interface CancelBookingInput {
   bookingId: string;
+  /** Staff/owner only: refund the credit even when the cancel window has passed. */
+  forceRefund?: boolean;
 }
 
 interface CancelBookingResult {
@@ -17,7 +19,7 @@ interface CancelBookingResult {
 /** Flujo B del spec: ventana de cancelación, penalización de crédito tardío, reasignación de waitlist. */
 export const cancelBookingSession = onCall<CancelBookingInput>(async (request) => {
   const claims = requireRole(request, "student", "staff", "tenant_owner");
-  const { bookingId } = request.data ?? ({} as CancelBookingInput);
+  const { bookingId, forceRefund = false } = request.data ?? ({} as CancelBookingInput);
   if (!bookingId) {
     throw new HttpsError("invalid-argument", "bookingId es requerido.");
   }
@@ -52,6 +54,11 @@ export const cancelBookingSession = onCall<CancelBookingInput>(async (request) =
     if (!scheduleSnap.exists) {
       throw new HttpsError("internal", "La clase asociada ya no existe.");
     }
+    const classTypeSnap = await tx.get(
+      tenantRef.collection("classTypes").doc((scheduleSnap.data() as ScheduleDoc).classTypeId),
+    );
+    // Refund what the booking actually charged, not a flat 1 credit.
+    const creditsToRefund = (classTypeSnap.data() as ClassTypeDoc | undefined)?.requiredCredits ?? 1;
 
     const tenant = tenantSnap.data() as TenantDoc;
     const schedule = scheduleSnap.data() as ScheduleDoc;
@@ -59,7 +66,9 @@ export const cancelBookingSession = onCall<CancelBookingInput>(async (request) =
 
     const hoursUntilClass =
       (schedule.startAt.toMillis() - Timestamp.now().toMillis()) / (1000 * 60 * 60);
-    const isOnTime = hoursUntilClass >= tenant.settings.cancelWindowHours;
+    const isOnTime =
+      hoursUntilClass >= tenant.settings.cancelWindowHours ||
+      (forceRefund && claims.role !== "student");
 
     let creditRefunded = false;
     if (isOnTime && booking.passUsedId) {
@@ -68,7 +77,7 @@ export const cancelBookingSession = onCall<CancelBookingInput>(async (request) =
       if (passSnap.exists) {
         const pass = passSnap.data() as StudentPassDoc;
         tx.update(passRef, {
-          remainingCredits: pass.remainingCredits + 1,
+          remainingCredits: pass.remainingCredits + creditsToRefund,
           status: "active",
         });
         creditRefunded = true;

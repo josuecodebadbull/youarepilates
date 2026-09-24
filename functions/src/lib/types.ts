@@ -97,6 +97,9 @@ export interface WaiverSignatureDoc {
   version: number;
   fullNameTyped: string;
   signedAt: Timestamp;
+  /** Set when staff recorded a paper signature on the student's behalf. */
+  method?: "paper";
+  recordedBy?: string;
 }
 
 export interface BookingDoc {
@@ -107,6 +110,10 @@ export interface BookingDoc {
   passUsedId: string | null;
   createdAt: Timestamp;
   canceledAt: Timestamp | null;
+  /** Set when staff booked on the student's behalf. */
+  bookedBy?: string;
+  /** Restrictions the admin knowingly bypassed (e.g. "no_credits", "waiver", "advanced_level"). */
+  overrides?: string[];
 }
 
 export interface WaitlistEntryDoc {
@@ -128,7 +135,10 @@ export interface StudentPassDoc {
 export interface UserDoc {
   email: string;
   displayName: string;
+  phone?: string;
   role: UserRole;
   tenantId: string | null;
   validatedBasicClasses: number;
+  /** `false` for a profile the studio created by hand (no Firebase Auth user yet). Absent = real account. */
+  hasAccount?: boolean;
 }

@@ -11,9 +11,10 @@ import {
   where,
 } from "firebase/firestore";
 import { ChevronRight, GraduationCap } from "lucide-react";
+import { httpsCallable } from "firebase/functions";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { db } from "@/lib/firebase/client";
+import { db, functions } from "@/lib/firebase/client";
 import { useTenant } from "@/lib/tenant/TenantProvider";
 import type { PackageDoc, StudentPassDoc, UserDoc } from "@/lib/types/firestore";
 import { Avatar } from "@/components/ui/Avatar";
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FormField, inputClass } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
+import { NewStudentForm } from "@/components/admin/NewStudentForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import {
   TableBody,
@@ -53,6 +55,7 @@ export default function AlumnosPage() {
   const [loaded, setLoaded] = useState(false);
   const [creditsByStudent, setCreditsByStudent] = useState<Record<string, number>>({});
   const [managingStudent, setManagingStudent] = useState<Student | null>(null);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     const studentsQuery = query(
@@ -110,8 +113,17 @@ export default function AlumnosPage() {
         <div className="flex items-center gap-3">
           <Avatar name={row.original.displayName || row.original.email} size={32} />
           <div className="min-w-0">
-            <p className="truncate font-medium text-ink">{row.original.displayName || "(sin nombre)"}</p>
-            <p className="truncate text-xs text-ink-soft">{row.original.email}</p>
+            <p className="truncate font-medium text-ink">
+              {row.original.displayName || "(sin nombre)"}
+              {row.original.hasAccount === false && (
+                <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+              Sin cuenta
+            </span>
+              )}
+            </p>
+            <p className="truncate text-xs text-ink-soft">
+              {row.original.email || row.original.phone || "Sin datos de contacto"}
+            </p>
           </div>
         </div>
       ),
@@ -140,14 +152,22 @@ export default function AlumnosPage() {
     <div>
       <PageHeader
         title="Alumnos"
-        description="Las personas registradas en tu app de reservas. Dales créditos aquí para ventas en efectivo, cortesías, o para hacer pruebas."
+        description="Tus alumnos, con o sin cuenta en la app. Dales créditos aquí para ventas en efectivo, cortesías, o para hacer pruebas."
+        action={<Button onClick={() => setCreating(true)}>+ Nuevo alumno</Button>}
       />
+
+      {creating && (
+        <Modal title="Nuevo alumno" onClose={() => setCreating(false)}>
+          <NewStudentForm onCreated={() => setCreating(false)} onCancel={() => setCreating(false)} />
+        </Modal>
+      )}
 
       {loaded && students.length === 0 ? (
         <EmptyState
           icon={<GraduationCap className="h-7 w-7" strokeWidth={1.75} />}
-          title="Todavía no tienes alumnos registrados"
-          description="Comparte el link de tu app (lo tienes en la barra lateral) para que empiecen a crear su cuenta."
+          title="Todavía no tienes alumnos"
+          description="Agrega a tu primer alumno, o comparte el link de tu app (lo tienes en la barra lateral) para que se registren solos."
+          action={<Button onClick={() => setCreating(true)}>+ Agregar mi primer alumno</Button>}
         />
       ) : (
         <>
@@ -161,8 +181,17 @@ export default function AlumnosPage() {
                 >
                   <Avatar name={student.displayName || student.email} size={40} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-gray-900">{student.displayName || "(sin nombre)"}</p>
-                    <p className="truncate text-sm text-gray-500">{student.email}</p>
+                    <p className="truncate font-medium text-gray-900">
+                      {student.displayName || "(sin nombre)"}
+                      {student.hasAccount === false && (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+              Sin cuenta
+            </span>
+                      )}
+                    </p>
+                    <p className="truncate text-sm text-gray-500">
+                      {student.email || student.phone || "Sin datos de contacto"}
+                    </p>
                   </div>
                   <span className="shrink-0 text-sm font-medium text-gray-600">
                     {student.totalCredits > 0 ? `${student.totalCredits} créditos` : "Sin créditos"}
@@ -191,7 +220,13 @@ export default function AlumnosPage() {
 
       {managingStudent && (
         <Modal title={managingStudent.displayName || managingStudent.email || "Alumno"} onClose={() => setManagingStudent(null)}>
-          <StudentCreditsPanel tenantId={tenantId} student={managingStudent} packages={packages} />
+          <StudentCreditsPanel
+            tenantId={tenantId}
+            student={managingStudent}
+            packages={packages}
+            accounts={students.filter((s) => s.hasAccount !== false)}
+            onLinked={() => setManagingStudent(null)}
+          />
         </Modal>
       )}
     </div>
@@ -202,10 +237,14 @@ function StudentCreditsPanel({
   tenantId,
   student,
   packages,
+  accounts,
+  onLinked,
 }: {
   tenantId: string;
   student: Student;
   packages: PackageItem[];
+  accounts: Student[];
+  onLinked: () => void;
 }) {
   const [passes, setPasses] = useState<Pass[]>([]);
 
@@ -224,7 +263,7 @@ function StudentCreditsPanel({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink-soft">{student.email}</p>
+      <p className="text-sm text-ink-soft">{student.email || student.phone}</p>
       <p className="text-sm font-medium text-ink">
         Créditos activos: {totalCredits > 0 ? totalCredits : "ninguno"}
       </p>
@@ -240,6 +279,113 @@ function StudentCreditsPanel({
       )}
 
       <AddCreditsForm tenantId={tenantId} studentId={student.id} packages={packages} />
+
+      {student.hasAccount === false && (
+        <NoAccountTools student={student} accounts={accounts} onLinked={onLinked} />
+      )}
+    </div>
+  );
+}
+
+function errorText(err: unknown): string {
+  return (err as { message?: string }).message ?? "Ocurrió un error. Intenta de nuevo.";
+}
+
+/** Tools that only make sense for a student the studio created by hand. */
+function NoAccountTools({
+  student,
+  accounts,
+  onLinked,
+}: {
+  student: Student;
+  accounts: Student[];
+  onLinked: () => void;
+}) {
+  const [accountId, setAccountId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(action: () => Promise<string>) {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      setMessage(await action());
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function link() {
+    const target = accounts.find((a) => a.id === accountId);
+    if (!target) return;
+    const name = target.displayName || target.email;
+    if (
+      !window.confirm(
+        `Se moverán las reservas, créditos e historial de ${student.displayName} a la cuenta de ${name}, y este perfil se eliminará. ¿Continuar?`,
+      )
+    ) {
+      return;
+    }
+    await run(async () => {
+      await httpsCallable(functions, "linkStudentProfile")({ profileId: student.id, accountId });
+      onLinked();
+      return "Vinculado.";
+    });
+  }
+
+  return (
+    <div className="space-y-4 border-t border-gray-100 pt-4">
+      <div>
+        <p className="text-sm font-medium text-ink">Este alumno no tiene cuenta</p>
+        <p className="text-xs text-ink-soft">
+          Lo gestionas tú desde aquí. Si ya se registró en la app, vincula su cuenta para conservar
+          reservas y créditos.
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        <select
+          value={accountId}
+          onChange={(e) => setAccountId(e.target.value)}
+          aria-label="Cuenta a vincular"
+          className={inputClass}
+        >
+          <option value="">Elige su cuenta registrada…</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.displayName || "(sin nombre)"} · {a.email}
+            </option>
+          ))}
+        </select>
+        <Button variant="secondary" disabled={!accountId || busy} onClick={link}>
+          Vincular
+        </Button>
+      </div>
+
+      <Button
+        variant="secondary"
+        disabled={busy}
+        onClick={() =>
+          run(async () => {
+            const { data } = await httpsCallable<{ studentId: string }, { alreadySigned: boolean }>(
+              functions,
+              "recordPaperWaiver",
+            )({ studentId: student.id });
+            return data.alreadySigned
+              ? "Ya tenía la responsiva vigente registrada."
+              : "Responsiva firmada en papel registrada.";
+          })
+        }
+      >
+        Registrar responsiva firmada en papel
+      </Button>
+
+      {message && <p className="text-sm text-green-700">{message}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }

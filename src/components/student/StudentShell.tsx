@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "firebase/auth";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { auth } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useTenant } from "@/lib/tenant/TenantProvider";
+import { InstallAppPrompt } from "@/components/student/InstallAppPrompt";
 
 function CalendarIcon({ active }: { active: boolean }) {
   return (
@@ -86,7 +87,12 @@ export function StudentShell({ children }: { children: ReactNode }) {
         )}
       </header>
 
-      <main className="px-4 py-5">{children}</main>
+      <main className="px-4 py-5">
+        <Suspense fallback={null}>
+          <InstallAppPrompt />
+        </Suspense>
+        {children}
+      </main>
 
       <nav className="fixed inset-x-0 bottom-0 flex border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]">
         {navItems.map((item) => {

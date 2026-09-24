@@ -25,6 +25,8 @@ interface WeekCalendarProps {
   onToday: () => void;
   /** Called with the day + hour of an empty cell the user clicked, to open the "programar clase" modal prefilled. */
   onSlotClick?: (day: Date, hour: number) => void;
+  /** Called when an existing class block is clicked, to manage its roster. */
+  onScheduleClick?: (schedule: Schedule) => void;
 }
 
 export function WeekCalendar({
@@ -36,6 +38,7 @@ export function WeekCalendar({
   onNextWeek,
   onToday,
   onSlotClick,
+  onScheduleClick,
 }: WeekCalendarProps) {
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
@@ -151,9 +154,12 @@ export function WeekCalendar({
                   return (
                     <div
                       key={schedule.id}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onScheduleClick?.(schedule);
+                      }}
                       title={`${classType?.name ?? "Clase"} · ${timeLabel} · ${instructor?.name ?? ""} · ${schedule.bookedCount}/${schedule.capacity}`}
-                      className={`absolute inset-x-0.5 overflow-hidden rounded border px-1.5 py-0.5 text-[11px] leading-tight ${
+                      className={`absolute inset-x-0.5 overflow-hidden rounded border px-1.5 py-0.5 text-[11px] leading-tight ${onScheduleClick ? "cursor-pointer hover:brightness-95" : ""} ${
                         isFull
                           ? "border-red-200 bg-red-100 text-red-800"
                           : "border-green-200 bg-green-100 text-green-800"

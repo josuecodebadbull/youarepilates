@@ -6,3 +6,8 @@ export { resetTenantData } from "./tenants/resetTenantData";
 export { bookClassSession } from "./bookings/bookClassSession";
 export { cancelBookingSession } from "./bookings/cancelBookingSession";
 export { mercadopagoWebhook } from "./payments/mercadopago";
+export {
+  createStudentProfile,
+  linkStudentProfile,
+  recordPaperWaiver,
+} from "./students/studentProfiles";

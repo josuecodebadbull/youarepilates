@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Armchair,
   Building2,
+  Download,
   CalendarDays,
   CreditCard,
   FileCheck,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { SiteHeader } from "@/components/marketing/SiteHeader";
+import { APP_INSTALL_HREF } from "@/lib/marketing";
 
 const features = [
   {
@@ -157,6 +159,13 @@ export default function LandingPage() {
             Ya tengo una cuenta
           </Link>
         </div>
+        <Link
+          href={APP_INSTALL_HREF}
+          className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:underline"
+        >
+          <Download className="h-4 w-4" strokeWidth={2} />
+          Descargar la app para alumnos
+        </Link>
         <p className="mt-4 text-xs text-ink-faint">
           Sin tarjeta de crédito para empezar. Configura tu estudio en minutos.
         </p>
@@ -261,6 +270,9 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 text-sm text-ink-soft sm:flex-row">
           <span>© {new Date().getFullYear()} YouArePilates</span>
           <div className="flex gap-6">
+            <Link href={APP_INSTALL_HREF} className="hover:text-ink">
+              Descargar app
+            </Link>
             <Link href="/login" className="hover:text-ink">
               Iniciar sesión
             </Link>
